@@ -2,9 +2,9 @@
 
 **被检查文件**：good-demo
 **适用法规**：PIPL + GDPR
-**扫描时间**：2026-09-16 15:33 UTC
-**检查项总数**：71（满足 56 · 部分 2 · 缺失 4 · 不适用 9）
-**有效风险统计**：🔴 高 0 · 🟡 中 3 · 🟢 低 3
+**扫描时间**：2026-09-16 15:46 UTC
+**检查项总数**：71（满足 56 · 部分 0 · 缺失 6 · 不适用 9）
+**有效风险统计**：🔴 高 0 · 🟡 中 2 · 🟢 低 4
 **整体风险等级**：🟡
 
 ## 中风险缺口（需评估）
@@ -24,14 +24,6 @@
 - **整改建议**：【GDPR】12 缺失：以清晰易懂语言提供信息。要求：须说明信息以清楚、平实语言提供给数据主体。
 - **法条依据**：The controller shall take appropriate measures to provide any information … in a concise, transparent, intelligible and easily accessible form, using clear and plain language. 
 - **来源**：https://gdpr-info.eu/art-12/（核验于 2026-09-16）
-
-### 🟡 删除权（被遗忘权）
-- **检查项编号**：GDPR-17（GDPR 第 17 条）
-- **判定**：⚠️ 部分满足
-- **命中证据**：我们对个人信息的保存期限为自您注销账户之日起 3 年（保存期限），到期后我们将删除或匿名化处理。
-- **整改建议**：【GDPR】17 部分满足：删除权（被遗忘权）。但要求：须保障数据主体在法定情形下请求删除的权利。
-- **法条依据**：The data subject shall have the right to obtain from the controller the erasure of personal data without undue delay. 
-- **来源**：https://gdpr-info.eu/art-17/（核验于 2026-09-16）
 
 ## 低风险提示
 
@@ -53,11 +45,19 @@
 
 ### 🟢 特定情形下的减损条款
 - **检查项编号**：GDPR-49（GDPR 第 49 条）
-- **判定**：⚠️ 部分满足
-- **命中证据**：we have designated a data protection officer (dpo). the data controller is xinghe technology co., ltd. you have the right to access, rectify, erase, restrict an…
-- **整改建议**：【GDPR】49 部分满足：特定情形下的减损条款。但要求：若依据第49条减损条款（如明示同意、合同必要）传输，须说明依据。
+- **判定**：❌ 缺失
+- **命中证据**：未找到
+- **整改建议**：【GDPR】49 缺失：特定情形下的减损条款。要求：若依据第49条减损条款（如明示同意、合同必要）传输，须说明依据。
 - **法条依据**：In the absence of an adequacy decision or appropriate safeguards, a transfer may take place only on specified derogations in Article 49(1). 
 - **来源**：https://gdpr-info.eu/art-49/（核验于 2026-09-16）
+
+### 🟢 行政罚款（信息性）
+- **检查项编号**：GDPR-83（GDPR 第 83 条）
+- **判定**：❌ 缺失
+- **命中证据**：未找到
+- **整改建议**：【GDPR】83 缺失：行政罚款（信息性）。要求：可提示违规可能面临的行政罚款（最高 2000 万欧元或全球营业额 4%）。
+- **法条依据**：Infringements may be subject to administrative fines up to 20,000,000 EUR, or in the case of an undertaking, up to 4% of total worldwide annual turnover. 
+- **来源**：https://gdpr-info.eu/art-83/（核验于 2026-09-16）
 
 ## 已满足 / 不适用项（65 项）
 
@@ -112,6 +112,7 @@
 - — 不适用 非直接收集时的额外告知（GDPR-14）
 - ✅ 满足 访问权（GDPR-15）
 - ✅ 满足 更正权（GDPR-16）
+- ✅ 满足 删除权（被遗忘权）（GDPR-17）
 - ✅ 满足 限制处理权（GDPR-18）
 - ✅ 满足 数据可携带权（GDPR-20）
 - ✅ 满足 反对权（GDPR-21）
@@ -125,7 +126,6 @@
 - ✅ 满足 适当保障措施（SCC/BCR 等）（GDPR-46）
 - — 不适用 儿童同意（信息服务）（GDPR-8）
 - ✅ 满足 向监管机构投诉的权利（GDPR-77）
-- ✅ 满足 行政罚款（信息性）（GDPR-83）
 
 ---
 

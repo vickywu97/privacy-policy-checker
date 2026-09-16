@@ -29,6 +29,29 @@ class TestEngine(unittest.TestCase):
         self.assertGreater(res["summary"]["effective_risk"]["high"], 0)
         self.assertNotEqual(res["summary"]["overall_risk"], "none")
 
+    def test_gdpr17_request_deletion_satisfied(self):
+        # 回归：GDPR-17 应命中"有权请求删除"段，而非保存期限段的自动删除
+        cps = load_checklists(_DATA, ["GDPR"])
+        res = analyze(_GOOD, cps)
+        r = [x for x in res["results"] if x["id"] == "GDPR-17"][0]
+        self.assertEqual(r["status"], "satisfied")
+        self.assertIn("请求删除", r["evidence"])
+
+    def test_gdpr49_no_derogations_missing(self):
+        # 回归：样例援引 SCC（Art 46）而非 Art 49 减损条款 → 应缺失，不应误判 partial
+        cps = load_checklists(_DATA, ["GDPR"])
+        res = analyze(_GOOD, cps)
+        r = [x for x in res["results"] if x["id"] == "GDPR-49"][0]
+        self.assertEqual(r["status"], "missing")
+
+    def test_auto_deletion_not_erasure_right(self):
+        # 仅含"保存期限到期后删除"的自动删除、不含主动删除权 → GDPR-17 不得判 satisfied
+        text = "我们对个人信息的保存期限为 3 年，到期后我们将删除或匿名化处理。"
+        cps = load_checklists(_DATA, ["GDPR"])
+        res = analyze(text, cps)
+        r = [x for x in res["results"] if x["id"] == "GDPR-17"][0]
+        self.assertNotEqual(r["status"], "satisfied")
+
     def test_partial_downgrades_risk(self):
         # 用一段只命中辅助词的文本，验证 partial 使 high->medium
         cp = {
