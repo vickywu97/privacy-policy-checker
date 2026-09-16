@@ -1,0 +1,38 @@
+# 隐私政策
+
+本隐私政策由 星河科技有限公司（以下简称"我们"）发布。如您对本政策有任何疑问，可通过邮箱 privacy@xinghe.example.com 或客服电话 400-000-0000 与我们联系。
+
+## 一、我们如何收集和使用您的个人信息
+我们出于向您提供产品与服务之目的（处理目的），通过客户端采集、服务器存储、加密传输等方式（处理方式）收集以下个人信息种类：姓名、手机号、电子邮箱、设备型号及操作系统版本。我们仅在最小必要范围内收集。
+
+## 二、敏感个人信息
+当您使用健康打卡功能时，我们将处理您的步数、心率等健康数据。此类敏感个人信息我们将取得您的单独同意，并告知您处理的必要性以及对个人权益的影响。
+
+## 三、个人信息的保存期限
+我们对个人信息的保存期限为自您注销账户之日起 3 年（保存期限），到期后我们将删除或匿名化处理。
+
+## 四、第三方共享与委托处理
+为提供地图服务，我们可能向第三方提供您的定位信息。我们向您告知接收方名称北京地图科技有限公司及其联系方式，并取得您的单独同意。受托方严格按照委托处理协议处理数据。
+
+## 五、跨境传输
+如您身处境外，我们可能向境外接收方 Xinghe Global Ltd.（联系方式 dpo@xinghe-global.example）提供您的账户信息，用于提供跨境服务。该跨境提供已取得您的单独同意，并已通过国家网信部门组织的安全评估。
+
+## 六、自动化决策
+我们基于您的浏览习惯进行个性化推荐。您可随时在设置中关闭推荐或选择不针对您个人特征的选项。
+
+## 七、未成年人保护
+我们不直接向十四周岁以下未成年人提供服务；如需处理未成年人信息，我们将取得其监护人同意并制定专门规则。
+
+## 八、您的权利
+您有权查阅、复制、更正、补充您的个人信息，并有权请求删除，也有权限制我们对您个人信息的处理（限制处理）。您也有权要求我们对其个人信息处理规则进行解释说明。死者近亲属可为本人的合法、正当利益行使上述权利。您可通过 privacy@xinghe.example.com 行使上述权利，我们将在十五个工作日内核实身份并响应。
+
+## 九、同意与撤回
+我们基于您的告知与同意处理个人信息。您有权随时撤回同意，撤回不影响撤回前已进行的处理活动。
+
+## 十、安全措施
+我们已采取加密、去标识化等安全技术措施及访问管理制度，保障个人信息安全。
+
+## 十一、合规评估与责任
+我们对敏感信息处理、自动化决策、跨境提供等活动事前开展个人信息保护影响评估。若违反本政策，我们可能承担法律责任，包括但不限于被责令改正、警告及罚款。
+
+We have designated a Data Protection Officer (DPO). The data controller is Xinghe Technology Co., Ltd. You have the right to access, rectify, erase, restrict and port your personal data, and to object to processing. You may lodge a complaint with the supervisory authority. Where processing is based on consent, you may withdraw consent at any time. We transfer personal data to third countries only under appropriate safeguards such as Standard Contractual Clauses (SCC).

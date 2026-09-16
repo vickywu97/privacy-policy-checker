@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "privacy-policy-checker"
+version = "0.1.0"
+description = "离线隐私政策合规体检器：对照 PIPL/GDPR 逐条核验，输出缺口清单+风险分级+条文级证据"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "Vicky Wu", email = "vickywu97@163.com" }]
+keywords = ["privacy", "pipl", "gdpr", "legal-tech", "compliance", "privacy-policy"]
+
+[project.scripts]
+privacy-policy-checker = "privacy_policy_checker.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["privacy_policy_checker*"]
