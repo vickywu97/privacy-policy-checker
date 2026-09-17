@@ -30,6 +30,8 @@ def build_parser():
     )
     p.add_argument("--project-name", default=None, help="项目名称（仅用于报告展示）")
     p.add_argument("-o", "--output", default=None, help="输出到文件（否则打印到 stdout）")
+    p.add_argument("--fail-on", choices=["high", "medium", "low"], default=None,
+                   help="CI 门禁：若存在有效风险等级>=该级别的检查项，以非零码退出（high/medium/low）")
     return p
 
 
@@ -66,6 +68,15 @@ def main(argv=None):
         print("报告已写入：%s" % args.output, file=sys.stderr)
     else:
         print(out)
+
+    if args.fail_on:
+        order = {"none": 0, "low": 1, "medium": 2, "high": 3}
+        hits = [r for r in analysis["results"]
+                if order.get(r["effective_risk"], 0) >= order[args.fail_on]]
+        if hits:
+            print("❌ CI 门禁未通过：%d 个检查项有效风险等级达到或超过 --fail-on=%s"
+                  % (len(hits), args.fail_on), file=sys.stderr)
+            return 1
     return 0
 
 

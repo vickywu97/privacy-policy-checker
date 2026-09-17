@@ -1,6 +1,8 @@
 # privacy-policy-checker
 
 [![CI](https://github.com/vickywu97/privacy-policy-checker/actions/workflows/ci.yml/badge.svg)](https://github.com/vickywu97/privacy-policy-checker/actions/workflows/ci.yml)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 **离线隐私政策合规体检器** —— 输入一段隐私政策文本，对照 PIPL（个人信息保护法）与 GDPR 的检查项库逐条核验，输出缺口清单 + 风险分级 + 条文级证据。
 
@@ -78,15 +80,15 @@ python -m privacy_policy_checker --file policy.txt --format json -o report.json
 
 ---
 
-## 与作品集其他项目的关系
+## 作品集关系
 
-| 项目 | 定位 |
-|------|------|
-| `legal-hallucination-bench` | 证明 AI 法律不可靠（本项目不用 LLM 正是吸取其教训） |
-| `oss-license-checker` | 开源许可证合规判定（工程 + 法务） |
-| `privacy-policy-checker` | 隐私政策合规体检（法务 + 产品） |
+| 项目 | 合规领域 | 判定性质 |
+|------|----------|----------|
+| [oss-license-checker](https://github.com/vickywu97/oss-license-checker) | 知产 / 开源法务 | 硬规则（兼容矩阵） |
+| [token-classifier](https://github.com/vickywu97/token-classifier) | Web3 / 加密法务 | 软规则（Howey 四要素） |
+| **privacy-policy-checker** | 数据 / 隐私法务 | 半硬规则（检查项） |
 
-三者共同构成「法律 + 工程」完整作品集，对标 in-house 法务 / 数据合规法务岗位。
+三者共同构成「法律 + 工程」完整作品集，均由律师 + 税务师 + 专利代理师 + 代码能力交集构建。
 
 ---
 
@@ -96,7 +98,7 @@ python -m privacy_policy_checker --file policy.txt --format json -o report.json
 - [ ] URL 抓取模式（用户主动提供确切 URL，单次 GET，遵守 robots.txt）
 - [ ] 行业模板（金融 / 医疗 / 儿童数据）
 - [ ] GitHub Pages 在线 demo
-- [ ] `--fail-on high` 参数（CI 集成）
+- [x] `--fail-on high` 参数（CI 集成）
 
 ---
 
