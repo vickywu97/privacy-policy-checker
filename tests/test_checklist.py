@@ -40,9 +40,38 @@ class TestChecklistIntegrity(unittest.TestCase):
                 n += 1
         self.assertGreaterEqual(n, 40)
 
+    def test_csl_valid(self):
+        path = os.path.join(_DATA, "checklist_csl.jsonl")
+        n = 0
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                obj = json.loads(line)
+                self.assertTrue(_REQUIRED.issubset(obj.keys()), "缺字段: %s" % obj.get("id"))
+                self.assertIn(obj["risk_if_missing"], ("high", "medium", "low"))
+                n += 1
+        self.assertGreaterEqual(n, 6)
+
+    def test_dsl_valid(self):
+        path = os.path.join(_DATA, "checklist_dsl.jsonl")
+        n = 0
+        with open(path, encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                obj = json.loads(line)
+                self.assertTrue(_REQUIRED.issubset(obj.keys()), "缺字段: %s" % obj.get("id"))
+                self.assertIn(obj["risk_if_missing"], ("high", "medium", "low"))
+                n += 1
+        self.assertGreaterEqual(n, 6)
+
     def test_ids_unique(self):
         ids = []
-        for fname in ("checklist_pipl.jsonl", "checklist_gdpr.jsonl"):
+        for fname in ("checklist_pipl.jsonl", "checklist_gdpr.jsonl",
+                      "checklist_csl.jsonl", "checklist_dsl.jsonl"):
             with open(os.path.join(_DATA, fname), encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()

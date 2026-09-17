@@ -12,15 +12,15 @@ from .report import to_json, to_markdown
 def build_parser():
     p = argparse.ArgumentParser(
         prog="privacy-policy-checker",
-        description="离线隐私政策合规体检器：对照 PIPL / GDPR 逐条核验，输出缺口清单 + 风险分级 + 条文级证据。",
+        description="离线隐私政策合规体检器：对照 PIPL / GDPR / 网络安全法(CSL) / 数据安全法(DSL) 逐条核验，输出缺口清单 + 风险分级 + 条文级证据。",
     )
     p.add_argument("--file", "-f", required=True, help="隐私政策文本文件路径（.txt/.md）")
     p.add_argument(
         "--laws",
         nargs="+",
         default=["PIPL", "GDPR"],
-        choices=["PIPL", "GDPR"],
-        help="适用的法规库，默认 PIPL GDPR",
+        choices=["PIPL", "GDPR", "CSL", "DSL"],
+        help="适用的法规库，默认 PIPL GDPR；可追加 CSL（网络安全法）/ DSL（数据安全法）做更全面的数据合规体检",
     )
     p.add_argument(
         "--format",

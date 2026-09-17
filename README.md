@@ -4,7 +4,7 @@
 [![Python 3.8+](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-**离线隐私政策合规体检器** —— 输入一段隐私政策文本，对照 PIPL（个人信息保护法）与 GDPR 的检查项库逐条核验，输出缺口清单 + 风险分级 + 条文级证据。
+**离线隐私政策合规体检器** —— 输入一段隐私政策文本，对照 PIPL（个人信息保护法）、GDPR、网络安全法（CSL）、数据安全法（DSL）的检查项库逐条核验，输出缺口清单 + 风险分级 + 条文级证据。
 
 > 一句话定位：律师与合规团队之间的「隐私政策翻译器」。通用 AI 会编造法条（已被 `legal-hallucination-bench` 证明不可靠），这个工具只用确定的关键词匹配 + 法条原文，零 LLM 依赖、离线、可复现。
 
@@ -34,6 +34,9 @@ python -m privacy_policy_checker --file path/to/privacy_policy.txt
 # 仅查 PIPL
 python -m privacy_policy_checker --file policy.txt --laws PIPL
 
+# 中国数据三法 + 欧盟 GDPR 全面体检（含网络安全法 / 数据安全法）
+python -m privacy_policy_checker --file policy.txt --laws PIPL GDPR CSL DSL
+
 # 输出工程版 JSON
 python -m privacy_policy_checker --file policy.txt --format json -o report.json
 ```
@@ -43,7 +46,7 @@ python -m privacy_policy_checker --file policy.txt --format json -o report.json
 | 参数 | 说明 |
 |------|------|
 | `--file` / `-f` | 隐私政策文本路径（必填） |
-| `--laws` | 法规库，默认 `PIPL GDPR`，可选其一 |
+| `--laws` | 法规库，默认 `PIPL GDPR`；可追加 `CSL`（网络安全法）/ `DSL`（数据安全法）做更全面的数据合规体检 |
 | `--format` | `md`（法务版 Markdown，默认）或 `json`（工程版） |
 | `--project-name` | 报告中的项目名展示 |
 | `-o` / `--output` | 输出到文件，否则打印到 stdout |
@@ -69,6 +72,10 @@ python -m privacy_policy_checker --file policy.txt --format json -o report.json
 |------|---------|------|
 | PIPL | 31 | 告知义务（第17条）、第三方共享（23）、自动化决策（24）、敏感个人信息（29-30）、未成年人（31）、跨境（38-39）、个人权利（44-50）、安全措施（51）、影响评估（55）、泄露通知（57）、定期审计（54）、法律责任（66） |
 | GDPR | 42 | 处理原则（5）、合法性基础（6-7,9）、透明义务（12-14）、告知义务（13-14）、数据主体权利（15-22）、安全（32）、泄露（33-34）、DPIA（35）、DPO（37）、跨境（44-49）、投诉与罚款（77,83） |
+| 网络安全法 CSL | 8 | 网络实名制（24）、等级保护（21）、收集使用合法正当必要（41）、信息保护义务与泄露补救（42）、境内存储/数据本地化（37）、查询更正删除权（43）、应急预案（25）、公开规则（22） |
+| 数据安全法 DSL | 8 | 数据分类分级（21）、重要数据管理责任（21/27）、风险监测（29）、数据安全事件应急（29）、重要数据出境安全评估（31）、收集合法性（32）、数据交易中介义务（33）、政务数据受托监督（38-40） |
+
+> CSL / DSL 多涉及**组织级安全义务**（如等级保护、分类分级、数据交易），通常需对照企业安全合规台账（而非仅隐私政策文本）核验；默认 `--laws` 不含二者，按需用 `--laws CSL DSL` 开启。
 
 每条检查项均附 **法条原文 + 来源 URL + 核验日期**，可追溯、可审计。
 

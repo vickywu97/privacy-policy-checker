@@ -43,7 +43,7 @@ def load_checklists(data_dir, laws):
         fname = "checklist_%s.jsonl" % law.lower()
         path = os.path.join(data_dir, fname)
         if not os.path.exists(path):
-            raise FileNotFoundError("检查项库不存在: %s（支持: PIPL, GDPR）" % path)
+            raise FileNotFoundError("检查项库不存在: %s（支持: PIPL, GDPR, CSL, DSL）" % path)
         with open(path, "r", encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
