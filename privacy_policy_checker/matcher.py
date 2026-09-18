@@ -17,15 +17,44 @@
 4. 段落证据归因：返回第一个含非否定命中的段落（core 优先于 aux）。
 """
 
+import re
+
 EVIDENCE_MAX_LEN = 220
 
-# 否定标记：命中词前 NEG_WINDOW 字符内出现任一标记，视为否定语境。
+# 否定标记：仅当命中词所在「同一分句」内、其前 NEG_WINDOW 字符出现任一标记，才视为否定语境。
+# 补充了更明确的中文明示否定句式（不提供 / 未提供 / 不予 / 不得 / 拒绝 等），
+# 但分句级作用域（逗号/顿号/分号亦为边界）可避免跨分句误伤（如「我们不会出售信息，但您可随时删除」中的删除权不应被否定）。
 NEGATION_MARKERS = [
+    "不提供", "未提供", "暂不提供", "不予", "不得", "拒绝", "无提供", "不含", "未包含",
     "不", "不能", "无法", "不会", "不支持", "暂不", "没有", "无", "未",
     "not ", "no ", "cannot", "can't", "do not", "does not", "won't",
-    "fails to", "without ",
+    "fails to", "without ", "refuse", "deny",
 ]
-NEG_WINDOW = 12
+NEG_WINDOW = 18
+# 否定判定作用域：以「分句」为单位（中文逗号/顿号/分号与句末标点同为分句边界），
+# 而非整句。这样「我们不会出售… ，但您可随时删除」中后一分句的删除权不会被前一分句的否定误伤。
+_CLAUSE_DELIM = re.compile(r"[，、；。！？!?；;\n]")
+
+
+def _negated_in_clause(para_lower, idx):
+    """判断 idx 处的命中是否落在同一分句内的否定语境中。
+
+    按分句标点切出 idx 所在分句，再在该分句内 idx 之前的 NEG_WINDOW 字符窗内检测否定标记。
+    跨分句的否定（如前分句「不会出售」、后分句「但您可删除」）不会误伤本分句命中。
+    """
+    # 分句起点：idx 之前最近的分句标点之后
+    start = 0
+    for m in _CLAUSE_DELIM.finditer(para_lower[:idx]):
+        start = m.end()
+    # 分句终点：idx 之后最近的分句标点
+    end = len(para_lower)
+    for m in _CLAUSE_DELIM.finditer(para_lower[idx:]):
+        end = idx + m.start()
+        break
+    rel = idx - start
+    # 窗口限定在本分句内（不得超过分句起点），避免回探到前一分句的否定词
+    window = para_lower[max(start, idx - NEG_WINDOW): idx]
+    return any(m in window for m in NEGATION_MARKERS)
 
 
 def _hit_in_paragraph(para_lower, patterns):
@@ -35,8 +64,7 @@ def _hit_in_paragraph(para_lower, patterns):
         idx = para_lower.find(pl)
         if idx == -1:
             continue
-        window = para_lower[max(0, idx - NEG_WINDOW):idx]
-        negated = any(m in window for m in NEGATION_MARKERS)
+        negated = _negated_in_clause(para_lower, idx)
         return pat, negated
     return None, False
 
