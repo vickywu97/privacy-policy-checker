@@ -54,7 +54,11 @@ def _negated_in_clause(para_lower, idx):
     rel = idx - start
     # 窗口限定在本分句内（不得超过分句起点），避免回探到前一分句的否定词
     window = para_lower[max(start, idx - NEG_WINDOW): idx]
-    return any(m in window for m in NEGATION_MARKERS)
+    # 排除「未来/未知/未必/未遂/未免/未婚」等复合词中的「未」，避免把时间副词误判为否定
+    # （与 token-classifier 抽取器一致性修复：裸「未」不得命中这些词）。
+    eff = (window.replace("未来", "").replace("未知", "").replace("未必", "")
+                 .replace("未遂", "").replace("未免", "").replace("未婚", ""))
+    return any(m in eff for m in NEGATION_MARKERS)
 
 
 def _hit_in_paragraph(para_lower, patterns):

@@ -69,6 +69,17 @@ class TestNegationContext(unittest.TestCase):
         self.assertEqual(self._status(text, "CSL-43"), "satisfied")
         self.assertEqual(self._status(text, "GDPR-17"), "satisfied")
 
+    def test_future_not_false_negation(self):
+        # 「我们会在未来为您删除…」中的「未来」不得被裸「未」误判为否定语境
+        # （与 token-classifier 抽取器一致性修复：排除「未来/未知/未必」等复合词）。
+        text = "我们会在未来为您删除账户数据。"
+        self.assertEqual(self._status(text, "CSL-43"), "satisfied")
+
+    def test_genuine_wei_denial_still_negated(self):
+        # 真正的「未提供」否定语气仍应判 missing（回归护栏，确保排除集不误伤真否定）。
+        text = "我们暂不提供删除渠道，也未提供删除功能。"
+        self.assertEqual(self._status(text, "CSL-43"), "missing")
+
 
 if __name__ == "__main__":
     unittest.main()
