@@ -1,0 +1,32 @@
+# Privacy Policy
+
+This Privacy Policy is provided by Galaxy Technology Co., Ltd. (the "Controller"), with registered address at 1 Innovation Road, Beijing, and a Data Protection Officer reachable at dpo@galaxy.example. You may contact us at privacy@galaxy.example or by post at our registered address.
+
+## 1. Purposes and Legal Basis
+We collect and use your personal data for the following specified, explicit and legitimate purposes: to provide our products and services, to improve them, and to comply with our legal obligations. The processing is based on your consent, the performance of a contract, and our legitimate interests in securing our platform. Where we rely on consent, it is freely given, specific, informed and unambiguous, and you may withdraw your consent at any time.
+
+## 2. Categories of Data and Recipients
+We collect name, email address, device information and location. We share personal data with third parties, including analytics and mapping service providers, and disclose it to recipients who are bound by data processing agreements. We do not sell your personal data.
+
+## 3. International Transfers
+We transfer personal data to third countries only under appropriate safeguards such as Standard Contractual Clauses (SCCs) or where the European Commission has adopted an adequacy decision. Where no adequacy decision or appropriate safeguards apply, a transfer may take place on the derogations in Article 49, such as your explicit consent or where the transfer is necessary for a contract.
+
+## 4. Retention
+We retain your personal data only for as long as necessary for the purposes for which it was collected, after which it is deleted or anonymised.
+
+## 5. Your Rights
+You have the right to access, to rectify, to erase (right to be forgotten), to restrict processing, to data portability, and to object to processing, including direct marketing. You may lodge a complaint with a supervisory authority. Where processing is based on consent, you may withdraw consent at any time. If you are a child below the age of consent, processing is lawful only if consent is given or authorised by the holder of parental responsibility.
+
+## 6. Automated Decision-Making
+We do not subject you to decisions based solely on automated processing, including profiling, which produce legal or similarly significant effects.
+
+## 7. Security
+We implement appropriate technical and organisational measures, including encryption and pseudonymisation, to ensure a level of security appropriate to the risk. In the case of a personal data breach, we will notify the supervisory authority without undue delay and, where feasible, not later than 72 hours after becoming aware, and will communicate the breach to affected data subjects when it is likely to result in a high risk.
+
+## 8. Impact Assessment
+Where a type of processing is likely to result in a high risk, we carry out a data protection impact assessment (DPIA).
+
+## 9. Special Categories
+We do not process special categories of personal data such as health, biometric or genetic data, except where we have obtained your explicit consent.
+
+We process personal data lawfully, fairly and in a transparent manner, in a concise, transparent, intelligible and easily accessible form, using clear and plain language.

@@ -1,0 +1,286 @@
+# 诚实性审计 · privacy-policy-checker
+
+> 审计目标：对匹配器每一处「不猜 / 不判」叙事（`not_applicable` / `partial` / `missing`），
+> 区分 **真克制**（输入确实缺信息）与 **能力缺口**（输入有可读信息但代码没覆盖）。
+> 本审计遵循「逐字打印原始输入，不凭记忆判断」纪律。发现的能力缺口只记录修复方案，**不立即实施**，
+> 待三个项目全部审计完成后统一决定修复优先级。
+
+---
+
+## 0. 结论速览
+
+| 审计维度 | 抽样 | 真克制 | 能力缺口 |
+|---------|------|--------|---------|
+| `not_applicable`（中文政策） | 11 条全查 | 11 | 0 |
+| `partial`（中文政策） | 4 条全查 | 0 | **4** |
+| 英文政策能力缺口 | 构造全合规英文政策 | 部分 | **显著** |
+| `high` 缺失适用性 | 1 条全查 | 1 | 0 |
+
+**核心发现（2 类系统性能力缺口）**：
+
+1. **`partial` 证据错配（aux 模式过度宽泛）** — 中文政策全部 4 个 `partial` 判定，均由单个超泛型 aux 词（「安全」「制度」「管理」）在**无关句子**中命中触发，证据被错配到跨境/安全措施段落。判定方向（partial 而非 satisfied）正确，但证据归因误导，属于能力缺口。
+2. **英文隐私政策能力缺口（关键词中文绑定）** — 一个**完全合规**的英文 GDPR/PIPL 政策被判定为 `29 not_applicable + 21 missing`（12 个 high）。大量条目**政策实际已覆盖**，仅因 `conditional_keywords` / `required_patterns` 以中文为主、英文同义词不足而被误判。这正是「能力缺口伪装成克制」的典型：工具看起来在保守地标注「不适用 / 缺失」，实则根本没读英文。
+
+真克制部分健康：`not_applicable` 在中文政策上全部为真克制；`high` 缺失（DSL-29b）确属真缺失。
+
+---
+
+## 1. 方法论
+
+- **驱动**：`scripts/honesty_audit.py` 加载四库检查项（PIPL/GDPR/CSL/DSL 共 87 条），对给定政策文本运行 `engine.analyze`，对每条非 `satisfied` 结果做**反向核验**：
+  - `not_applicable`：逐字打印 `conditional_keywords`，全文扫描是否真的无任何相关语境词；
+  - `partial` / `missing`：打印已命中证据（逐字）+ `core_patterns`（逐字），并全文扫描 core 词是否真的缺席（若出席却未判满足 = 能力缺口 / 排序 bug）。
+- **判定标准**（用户给定）：
+
+| 类型 | 定义 | 判断标准 |
+|------|------|---------|
+| 真克制 | 输入里确实没有足够信息做判断 | 逐字打印输入，确实缺少判断所需的字段/条款 |
+| 能力缺口 | 输入里有足够信息，但代码没读/没解析 | 输入里有结构化字段或明确特征句，但代码路径没覆盖 |
+
+- **纪律**：逐条打印原始输入；遇到能力缺口只记录修复方案，不实施；不 push。
+
+---
+
+## 2. Audit A — `not_applicable` 逐条核查（中文政策 `demo/sample_privacy_policy.txt`）
+
+共 11 条 `not_applicable`，**全部为真克制**。抽代表性 10 条，逐字核对 `conditional_keywords` 与全文：
+
+| 场景 | conditional_keywords（逐字） | 反向核验 |
+|------|------------------------------|---------|
+| PIPL-52 个人信息保护负责人 | `['处理数量','达到规定数量','重要互联网平台']` | 全文无 → 真克制 |
+| PIPL-58 大型平台义务 | `['平台','用户数量巨大','重要互联网平台']` | 全文无 → 真克制 |
+| PIPL-57 泄露通知义务 | `['泄露','安全事件','丢失','篡改']` | 全文无（安全措施段仅「安全技术措施」，非「安全事件」）→ 真克制 |
+| GDPR-13-1d 合法利益说明 | `['legitimate interests','合法利益']` | 全文无 → 真克制（政策以同意为基，未主张合法利益） |
+| GDPR-14 非直接收集告知 | `['not obtained','indirect','间接','third party source']` | 全文无 → 真克制 |
+| GDPR-8 儿童同意 | `['children','儿童','minor']` | 全文无 → 真克制（产品不面向儿童） |
+| PIPL-49 死者近亲属 | `['死者']` | 全文无 → 真克制 |
+| CSL-24 网络实名制 | `['注册','入网','用户','账号']` | 全文无 → 真克制 |
+| DSL-33 数据交易中介 | `['数据交易','交易','中介']` | 全文无 → 真克制 |
+| DSL-38 政务数据受托 | `['政务数据','政务','受托']` | 全文无 → 真克制 |
+
+**结论**：`not_applicable` 门禁（conditional 命中才进入实质判定）在中文政策上工作正确，无「克制伪装」。
+
+---
+
+## 3. Audit B — `partial` 逐条核查（中文政策，全部 4 条）
+
+> 判定方向（partial 而非 satisfied）正确：全文确实无 core 词。但**证据归因错误**——aux 词命中在无关句子。
+
+### 场景：privacy-policy-checker - CSL-21（CSL 21）
+
+- **检查项**：落实网络安全等级保护制度
+- **当前判定**：`partial`（有效风险 medium，risk_if_missing high）
+- **原始输入 — 已命中证据（逐字）**：
+  ```
+  如您身处境外，我们可能向境外接收方 Xinghe Global Ltd.…该跨境提供已取得您的单独同意，并已通过国家网信部门组织的安全评估。
+  ```
+- **core_patterns（逐字）**：`['等级保护','网络安全等级','等保','安全保护义务','三级等保']`
+- **代码路径**：`privacy_policy_checker/matcher.py::match()`
+- **判断**：
+  - [ ] 真克制
+  - [x] **能力缺口**：aux 词「安全」在「安全评估」（跨境传输语境）中被命中，错配为「网络安全等级保护」的部分满足证据。core 词确实全文缺席（真无等保表述），但所展示的"部分满足"证据与检查项无关。
+- **修复方案**：收紧 `aux_patterns`（移除「安全」「制度」「管理」「风险」等超泛型单字/双字，改用短语如「等级保护」「网络安全等级保护制度」）；或要求 aux 命中须与 core 语义同句/同段，避免跨语境误归因。
+
+---
+
+### 场景：privacy-policy-checker - DSL-21a（DSL 21）
+
+- **检查项**：建立数据分类分级保护制度
+- **当前判定**：`partial`（有效风险 medium）
+- **原始输入 — 已命中证据（逐字）**：
+  ```
+  我们已采取加密、去标识化等安全技术措施及访问管理制度，保障个人信息安全。
+  ```
+- **core_patterns（逐字）**：`['分类分级','数据分类','分级保护','重要数据目录']`
+- **判断**：
+  - [ ] 真克制
+  - [x] **能力缺口**：aux 词「制度」在「访问管理制度」中命中，但「访问管理制度」指访问控制，与「数据分类分级」无关。
+- **修复方案**：同上，收紧 aux；「制度」单独出现应排除（除非与「分类分级 / 数据分类」同现）。
+
+---
+
+### 场景：privacy-policy-checker - DSL-21b（DSL 21/27）
+
+- **检查项**：重要数据处理者明确数据安全负责人与管理机构
+- **当前判定**：`partial`（有效风险 medium）
+- **原始输入 — 已命中证据（逐字）**：
+  ```
+  我们已采取加密、去标识化等安全技术措施及访问管理制度，保障个人信息安全。
+  ```
+- **core_patterns（逐字）**：`['重要数据','数据安全负责人','管理机构','数据安全责任']`
+- **判断**：
+  - [ ] 真克制
+  - [x] **能力缺口**：aux 词「管理」在「访问管理制度」中命中，错配为「数据安全负责人与管理机构」的部分满足证据。
+- **修复方案**：同上。
+
+---
+
+### 场景：privacy-policy-checker - DSL-29a（DSL 29）
+
+- **检查项**：数据处理活动风险监测与隐患补救
+- **当前判定**：`partial`（有效风险 low）
+- **原始输入 — 已命中证据（逐字）**：
+  ```
+  如您身处境外，我们可能向境外接收方 Xinghe Global Ltd.…该跨境提供已取得您的单独同意，并已通过国家网信部门组织的安全评估。
+  ```
+- **core_patterns（逐字）**：`['风险监测','监测预警','安全隐患','监测机制']`
+- **判断**：
+  - [ ] 真克制
+  - [x] **能力缺口**：aux 词「安全」在「安全评估」中命中，错配为「风险监测」的部分满足证据。
+- **修复方案**：同上。
+
+**Audit B 小结**：4/4 全为能力缺口（aux 过度宽泛导致证据错配）。这是一致性 bug——同一段"安全评估/访问管理制度"被错配给 4 个不同检查项。修复后预计这 4 条将转为 `missing`（high），风险由 medium 升回 high——**可见当前报告把这些缺口"粉饰"成了 partial，低估了真实风险**。
+
+---
+
+## 4. Audit C — 英文隐私政策能力缺口（构造全合规样例）
+
+### 4.1 构造方法
+新建 `demo/sample_privacy_policy_en.txt`：一个**完全覆盖** GDPR + PIPL 要点的英文隐私政策（控制者身份与联系、目的与合法基础、同意与撤回、接收方、跨境传输 SCC/充分性/第49条减损、保存期限、数据主体权利全项、DPO、投诉权、儿童、安全措施、72h 泄露通知、DPIA、特殊类别数据）。
+
+### 4.2 运行结果（PIPL+GDPR+CSL+DSL 共 87 项）
+```
+satisfied 32 · partial 5 · missing 21 · not_applicable 29
+有效风险：high 12 · medium 8 · low 6 · none 61
+```
+一个真正合规的英文政策被判出 **12 个 high 风险**——明显是误判。
+
+### 4.3 代表性 false `not_applicable`（政策已覆盖，但中文 conditional 缺失）
+
+| 场景 | 英文政策原文（逐字，证明确已覆盖） | conditional_keywords（逐字） | 错配根因 |
+|------|-----------------------------------|------------------------------|---------|
+| PIPL-23 第三方共享 | `We share personal data with third parties, including analytics and mapping service providers, and disclose it to recipients...` | `['第三方','共享','委托','提供','对外']` | 全中文，英文 "third parties / share / recipients" 未列入 |
+| PIPL-24 自动化决策 | `We do not subject you to decisions based solely on automated processing, including profiling...` | `['推荐','自动化','算法','画像','决策']` | 全中文，英文 "automated processing / profiling" 未列入 |
+| PIPL-29/30 敏感信息 | `We do not process special categories of personal data such as health, biometric or genetic data, except where we have obtained your explicit consent.` | `['敏感','生物识别','医疗健康','金融账户','行踪轨迹','宗教信仰','性取向']` | 全中文，英文 "special categories / health / biometric / genetic" 未列入 |
+| PIPL-31 未成年人 | `If you are a child below the age of consent, processing is lawful only if consent is given...` | `['未成年','儿童','14周岁','十四周岁']` | 全中文，且漏了 "child"（只用复数 children）/ "age of consent"——即便 required 含 "child" 也因 conditional 门禁先挡掉 |
+| PIPL-55 影响评估 | `...we carry out a data protection impact assessment (DPIA).` | `['敏感','跨境','自动化决策','对外提供','委托','公开']` | 全中文，英文 "impact assessment / DPIA" 未列入 |
+| PIPL-57 泄露通知 | `In the case of a personal data breach, we will notify the supervisory authority... and will communicate the breach to affected data subjects...` | `['泄露','安全事件','丢失','篡改']` | 全中文，英文 "personal data breach / notify" 未列入 |
+| CSL-43 查询更正删除 | `You have the right to access, to rectify, to erase...` | `['个人信息','信息','删除','更正']` | 全中文 |
+
+### 4.4 代表性 false `missing`（政策已覆盖，但中文 required 缺失）
+
+| 场景 | 英文政策原文（逐字） | core_patterns（逐字） | 错配根因 |
+|------|---------------------|------------------------|---------|
+| PIPL-17-1 处理者名称 | `Galaxy Technology Co., Ltd. (the "Controller"), with registered address at 1 Innovation Road, Beijing` | `['个人信息处理者','本政策由','本隐私政策由','运营者','公司名称']` | 全中文；"公司名称 / Controller" 未列入 |
+| PIPL-17-2 联系方式 | `You may contact us at privacy@galaxy.example or by post at our registered address.` | `['联系方式','联系我们','邮箱','电子邮箱','电话','地址']` | 全中文；"email / address / contact" 未列入 |
+| PIPL-17-3 处理目的 | `We collect and use your personal data for the following specified, explicit and legitimate purposes...` | `['处理目的','使用目的','目的','为了','以便','用于']` | 全中文；"purposes / for the following" 未列入 |
+| PIPL-17-6 保存期限 | `We retain your personal data only for as long as necessary for the purposes...` | `['保存期限','存储期限','保留期限','保存期间','保存时间','存储期间']` | 全中文；"retain / retention" 未列入 |
+
+### 4.5 根因
+1. `conditional_keywords` 与 `required_patterns` 以中文为主，英文同义词覆盖严重不足（仅少数 GDPR 条目含英文）。
+2. `match()` 流程：先判 `conditional` 门禁（未命中 → `not_applicable`，直接返回），**即使该条目的 `required_patterns` 含英文同义词也无济于事**——门禁优先于实质判定。
+3. 结果：合规英文政策被系统性地"标成不适用 / 缺失"，呈现为「克制」，实为「没读英文」。
+
+### 4.6 真实性克制（同一英文政策中合理的 N/A）
+以下 `not_applicable` 对"全球英文政策"是合理的（中国法专有或确不适用），不属能力缺口：
+CSL-21/37（等保、CII 境内存储，中国专有）、CSL-24（实名，中国专有）、DSL-31/32（重要数据出境，中国专有）、DSL-33/38（数据交易中介/政务数据，确不适用）、PIPL-52/58（大型处理者，政策未主张）。
+> 注意：若产品实际在华运营却只发英文政策，上述 CSL/DSL 条仍应适用——此时 N/A 会变成"误判不适用"。属同一根因（英文缺中国法同义词），优先级低于 GDPR/PIPL 主干。
+
+---
+
+## 5. Audit D — `high` 缺失项适用性核查
+
+### 场景：privacy-policy-checker - DSL-29b（DSL 29）
+
+- **检查项**：数据安全事件应急预案、补救与报告
+- **当前判定**：`missing`（有效风险 high）
+- **原始输入**：全文无任何 core 词（`['数据安全事件','应急预案','应急补救','向有关主管部门报告']`）
+- **适用性**：样例产品为真实运营 App，发生数据安全事件须有应急预案并向主管部门报告——**该项对样例产品确属适用**，确为真实缺口。
+- **判断**：
+  - [x] **真克制**：输入中确实缺少所需信息（政策全文未提及任何应急预案/补救措施）。
+  - [ ] 能力缺口
+- **结论**：判定正确，无粉饰。
+
+（其余 high 缺失仅此 1 条；CSL-21/DSL-21a/21b/29a 的 high 风险经 Audit B 证实为 partial 错配，真实应为 missing high——见 §3。）
+
+---
+
+## 6. 否定语境 / 双语境（补充核查）
+
+- **否定语境检测**：`matcher._negated_in_clause` 已实现分句级否定检测（git 历史含「分句级否定」「排除未来/未知/未必等复合词」两次修正）。本次审计未发现新的否定误判反例；该机制与 token-classifier 抽取器一致性已对齐。
+- **双语境（dual_context）**：该叙事属 token-classifier 范畴，privacy-policy-checker 无对应"不判"场景，不在本审计范围。
+
+---
+
+## 7. 发现汇总
+
+| # | 场景 | 当前判定 | 类型 | 说明 |
+|---|------|---------|------|------|
+| 1 | CSL-21 partial | partial→应为 missing | 能力缺口 | aux「安全」错配自跨境安全评估句 |
+| 2 | DSL-21a partial | partial→应为 missing | 能力缺口 | aux「制度」错配自访问管理制度句 |
+| 3 | DSL-21b partial | partial→应为 missing | 能力缺口 | aux「管理」错配自访问管理制度句 |
+| 4 | DSL-29a partial | partial→应为 missing | 能力缺口 | aux「安全」错配自跨境安全评估句 |
+| 5 | 英文政策 PIPL-17-1 | missing→应为 satisfied | 能力缺口 | 英文"Controller/Co., Ltd."未入 required |
+| 6 | 英文政策 PIPL-23/24/29/30/31/55/57 | not_applicable→应为 satisfied | 能力缺口 | 中文 conditional 缺英文同义词 |
+| 7 | 英文政策 CSL-43 等 | not_applicable/missing | 能力缺口 | 中文关键词缺英文同义词 |
+| 8 | 中文政策 11 条 not_applicable | not_applicable | 真克制 | conditional 确无命中 |
+| 9 | DSL-29b high missing | missing | 真克制 | 确属真实缺口，适用 |
+
+---
+
+## 8. 修复方案（仅记录，不实施）
+
+**P0 — 英文能力缺口（影响最大）**
+- 为所有检查项补充英文同义词到 `conditional_keywords` 与 `required_patterns` / `core_patterns`：
+  - 身份/联系：`controller` / `company` / `registered address` / `email` / `contact`
+  - 目的：`purposes` / `for the following`；保存期限：`retain` / `retention`
+  - 第三方：`third parties` / `share` / `recipients`；委托：`data processing agreement` / `processor`
+  - 自动化：`automated processing` / `profiling`；敏感：`special categories` / `health` / `biometric` / `genetic`
+  - 儿童：`child` / `age of consent`（补单数，与 required 对齐）；影响评估：`impact assessment` / `DPIA`
+  - 泄露：`personal data breach` / `notify`；权利：`access` / `rectify` / `erase` / `port` / `object`
+- 修复后预计：英文合规政策 satisfied 由 32 → ~60+，high 风险由 12 → 接近 0（仅剩真实缺口）。
+
+**P1 — partial 证据错配（aux 过度宽泛）**
+- 收紧 `aux_patterns`：移除「安全」「制度」「管理」「风险」等超泛型单/双字；改用语义短语（「等级保护」「分类分级」「风险监测」）。
+- 或增加"aux 须与 core 同句/同段"约束，杜绝跨语境误归因。
+- 修复后：CSL-21/DSL-21a/21b/29a 由 partial 转为 missing（high），风险如实上升。
+
+**P2 — conditional 门禁与 core 一致性**
+- 确保 `conditional_keywords` 是 `required_patterns`/`core_patterns` 的超集语义；避免"required 含英文但 conditional 仅中文"导致门禁误杀（如 GDPR-8 / PIPL-31）。
+- CSL/DSL 中国法专有条目：考虑增加 `applicability_hint`（如「适用地区：中国」），避免对纯英文全球政策的误 N/A（或在报告中标注"中国法条目，需中文政策核验"）。
+
+---
+
+## 9. 可复现性
+
+```bash
+cd privacy-policy-checker
+
+# 中文政策审计（not_applicable / partial / missing 反向核验转储）
+python3 scripts/honesty_audit.py --policy demo/sample_privacy_policy.txt \
+    --laws PIPL GDPR CSL DSL --label good-sample
+
+# 英文政策能力缺口审计（构造的合规英文政策）
+python3 scripts/honesty_audit.py --policy demo/sample_privacy_policy_en.txt \
+    --laws PIPL GDPR CSL DSL --label english-only
+```
+
+审计脚本 `scripts/honesty_audit.py` 仅依赖标准库 + 本项目模块，逐字打印原始输入并做反向核验，可供人工判读「真克制 vs 能力缺口」。
+
+---
+
+## 10. 修复执行记录（Step 1 · Finding 1 / P0）
+
+> 按用户优先级指令执行：Finding 1（partial 证据错配）为 P0，先于英文能力缺口（P1）修复。
+
+### 10.1 修复方式
+- `scripts/add_topic_terms.py`：为四个检查项库（PIPL/GDPR/CSL/DSL 共 87 条）**每条**补充 `topic_terms` 字段。
+  - 4 个被证实错配项（CSL-21 / DSL-21a / DSL-21b / DSL-29a）写入**收窄到本检查项主题域**的主题词；
+  - 其余条目 `topic_terms` 默认取自身 `context_patterns`（aux ⊆ context，故 aux 命中的句子必然含 context 词 = topic，**行为向后兼容，不降级**）。
+- `matcher.py`：新增 `_sentence_containing` / `_any_aux_hit_with_topic`；在 aux-only 分支，若检查项带 `topic_terms` 且**所有 aux 命中均落在不含主题词的句子**中 → 降级为 `missing`（不再粉饰成 partial）。
+
+### 10.2 验证结果（中文样例 `demo/sample_privacy_policy.txt`）
+
+| 检查项 | 修复前 | 修复后 | 有效风险 | 说明 |
+|--------|--------|--------|----------|------|
+| CSL-21 | partial | **missing** | high | risk_if_missing=high |
+| DSL-21a | partial | **missing** | high | risk_if_missing=high |
+| DSL-21b | partial | **missing** | high | risk_if_missing=high |
+| DSL-29a | partial | **missing** | **medium** | **更正：其 risk_if_missing=medium，故修复后为 missing(medium)，非 high（§5/§7 曾误写为 high）** |
+
+- 中文样例汇总变化：`partial 4 → 0`，`missing 7 → 11`，`high 1 → 4`，`medium 6 → 4`，`low 4 → 3`。
+- 英文样例（`sample_privacy_policy_en.txt`）**无回归**：5 个 partial 依赖英文 aux 模式（其 topic_terms 为英文 context 词，政策中真实存在），故正确保留 partial；整体仍呈 `29 N/A + 21 missing + 12 high`，验证能力缺口依旧成立。
+- 新增 7 项测试（`test_matcher.py::TestFinding1TopicTerms`）；全量测试 **32 绿**（原 25）。
+
+### 10.3 审计结论更正
+- 原报告 §5 / §7 称 CSL-21/DSL-21a/21b/29a 均应转为 `missing(high)`——其中 DSL-29a 实际 `risk_if_missing=medium`，修复后为 `missing(medium)`。此更正不影响「4 条均为能力缺口、且 partial 低估了真实风险」的核心结论。
