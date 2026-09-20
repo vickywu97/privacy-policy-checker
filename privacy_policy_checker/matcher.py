@@ -12,8 +12,12 @@
    - core_patterns（缺省回退 required_patterns）命中 → satisfied；
      证据取自真正含该词的段落，避免把「保存期限自动删除」误归为「删除权」。
    - aux_patterns（缺省回退 context_patterns）仅命中 → partial（低置信，需人工复核）；
-     但若检查项带 `topic_terms`，且所有 aux 命中均落在**不含主题词**的句子中，
-     则视为虚假命中，降级为 missing（诚实性审计 Finding 1 / P0：避免把无关句中的泛型词粉饰成 partial）。
+     但若检查项带 `topic_terms`：
+       · aux 命中落在**正文句子**、且该句不含主题词 → 降级 missing（Finding 1 / P0：
+         避免把无关句中的泛型词粉饰成 partial）；
+       · aux 命中落在**章节标题** → 将该标题统领的整节（标题 + 后续正文，直至下一同级/更高级标题）
+         视为同一语境再判主题词共现：整节含主题词 → partial（修复"标题含 aux、正文含 topic"
+         的 Step 1 回归 C1/C1b/C2 假阴性），整节不含 → missing（章节隔离，不复活 Finding 1 虚假 partial）。
 3. 否定语境检测：命中词紧邻否定词（不/不会/not/...）时该次命中作废，
    继续寻找其他非否定出现；全为否定则视为未命中（避免「我们不提供 X」被误判为满足）。
 4. 段落证据归因：返回第一个含非否定命中的段落（core 优先于 aux）。
@@ -79,26 +83,65 @@ def _sentence_containing(para_lower, idx):
     return para_lower[start:end]
 
 
-def _any_aux_hit_with_topic(aux, paragraphs_lower, topic):
-    """扫描全部段落：若存在某个非否定 aux 命中，且其所在句子含任一 topic_terms，返回 True。
+def _aux_in_para_topic(para_lower, aux, topic):
+    """句级约束（Finding 1 / P0）：段落 `para_lower` 内若存在非否定 aux 命中，且**该命中所在句子**
+    含任一 topic_terms，返回 True（保留 partial）；否则 False（降级 missing）。
 
-    用于抑制「aux 词在无关句子中命中」造成的虚假 partial（诚实性审计 Finding 1 / P0）：
-    仅当 aux 命中落在含本检查项主题词的同一句时，才保留 partial；否则视为未满足（降级 missing）。
+    仅判当前段落（与「aux 命中在正文 → 保持句级」一致），不跨段落扩散。
     """
-    for para in paragraphs_lower:
-        for pat in aux:
-            pl = pat.lower()
-            start = 0
-            while True:
-                idx = para.find(pl, start)
-                if idx == -1:
-                    break
-                if not _negated_in_clause(para, idx):
-                    sent = _sentence_containing(para, idx)
-                    if any(t.lower() in sent for t in topic):
-                        return True
-                start = idx + 1
+    for pat in aux:
+        pl = pat.lower()
+        start = 0
+        while True:
+            idx = para_lower.find(pl, start)
+            if idx == -1:
+                break
+            if not _negated_in_clause(para_lower, idx):
+                sent = _sentence_containing(para_lower, idx)
+                if any(t.lower() in sent for t in topic):
+                    return True
+            start = idx + 1
     return False
+
+
+# 章节标题识别（启发式，零依赖，不引入 NLP/模型）：
+#  - 行首 #..#（markdown 标题）
+#  - 行首 一、 / （一） / 第X章 / 第X条（中文序号标题）
+#  - 短行（<20 字）且不以标点结尾（疑似标题）
+# 返回标题层级（整数，越小越「高级」），非标题返回 None。
+def _heading_level(line_lower):
+    s = line_lower.strip()
+    if not s:
+        return None
+    m = re.match(r"^#{1,6}\s", s)
+    if m:
+        return len(re.match(r"^#+", s).group())
+    if re.match(r"^第.{1,6}[章节]", s):
+        return 1
+    if re.match(r"^第.{1,6}条", s):
+        return 3
+    if re.match(r"^[一二三四五六七八九十百零]+、", s):
+        return 2
+    if re.match(r"^（[一二三四五六七八九十]+）", s):
+        return 3
+    if len(s) < 20 and s[-1] not in "。！？!?；;，、：:.…":
+        return 5
+    return None
+
+
+def _section_text(paragraphs_lower, aidx, level):
+    """返回以 `aidx`（层级 `level` 的标题段落）为起点的整节文本：标题 + 后续正文，
+    直至下一个层级 ≤ `level` 的标题之前（同级或更高级标题开启新节；低级标题属子节、纳入本节）。
+
+    用于 section-aware：aux 命中在章节标题时，把整节（标题统领的上下文）视为同一语境判 topic 共现。
+    """
+    end = len(paragraphs_lower)
+    for j in range(aidx + 1, len(paragraphs_lower)):
+        lvl = _heading_level(paragraphs_lower[j])
+        if lvl is not None and lvl <= level:
+            end = j
+            break
+    return "\n".join(paragraphs_lower[aidx:end])
 
 
 def _hit_in_paragraph(para_lower, patterns):
@@ -169,16 +212,40 @@ def match(checkpoint, text_lower, paragraphs_lower, paragraphs_original=None):
 
     ap, aidx = _find(aux, paragraphs_lower)
     if ap is not None:
-        # Finding 1 / P0：aux 命中但全句无主题词 → 视为虚假命中，降级 missing
+        # Finding 1 / P0：aux 命中但无主题词共现 → 视为虚假命中，降级 missing。
+        # section-aware（Step 1 回归修复）：若 aux 命中位于章节标题，将该标题统领的整节
+        # （标题 + 后续正文，直至下一同级/更高级标题）视为同一语境再判 topic 共现——
+        # 既修复「标题含 aux、正文含 topic」的 Step 1 回归（C1/C1b/C2 假阴性），
+        # 又因章节隔离而不复活 Finding 1 虚假 partial（跨节 topic 不计入本节）。
         topic = checkpoint.get("topic_terms") or []
-        if topic and not _any_aux_hit_with_topic(aux, paragraphs_lower, topic):
-            return {
-                "status": "missing",
-                "evidence": _evidence(paragraphs_original[aidx], paragraphs_lower[aidx]),
-                "matched_pattern": None,
-                "reason": "辅助词“%s”仅在未出现本检查项主题词（%s）的句子中命中，视为未满足"
-                         % (ap, " / ".join(topic[:3])),
-            }
+        if topic:
+            lvl = _heading_level(paragraphs_lower[aidx])
+            if lvl is not None:
+                section = _section_text(paragraphs_lower, aidx, lvl)
+                if any(t.lower() in section for t in topic):
+                    return {
+                        "status": "partial",
+                        "evidence": _evidence(paragraphs_original[aidx], paragraphs_lower[aidx]),
+                        "matched_pattern": ap,
+                        "reason": "仅命中辅助词（位于章节标题），该节正文含本检查项主题词（%s），视为低置信部分满足，建议人工复核"
+                                 % " / ".join(topic[:3]),
+                    }
+                return {
+                    "status": "missing",
+                    "evidence": _evidence(paragraphs_original[aidx], paragraphs_lower[aidx]),
+                    "matched_pattern": None,
+                    "reason": "辅助词“%s”仅在本节标题命中，整节正文未出现本检查项主题词（%s），视为未满足"
+                             % (ap, " / ".join(topic[:3])),
+                }
+            # aux 命中在正文 → 句级约束（原 Finding 1 行为：同句含主题词才 partial）
+            if not _aux_in_para_topic(paragraphs_lower[aidx], aux, topic):
+                return {
+                    "status": "missing",
+                    "evidence": _evidence(paragraphs_original[aidx], paragraphs_lower[aidx]),
+                    "matched_pattern": None,
+                    "reason": "辅助词“%s”仅在未出现本检查项主题词（%s）的句子中命中，视为未满足"
+                             % (ap, " / ".join(topic[:3])),
+                }
         return {
             "status": "partial",
             "evidence": _evidence(paragraphs_original[aidx], paragraphs_lower[aidx]),

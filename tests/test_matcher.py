@@ -1,7 +1,12 @@
 import unittest
 
 from privacy_policy_checker.engine import load_checklists
-from privacy_policy_checker.matcher import match, match_all
+from privacy_policy_checker.matcher import (
+    match,
+    match_all,
+    _heading_level,
+    _section_text,
+)
 
 _DATA = "privacy_policy_checker/data"
 
@@ -149,6 +154,84 @@ class TestFinding1TopicTerms(unittest.TestCase):
         cp = dict(_CP, required_patterns=["xyz_nonexistent_xyz"])
         m = match(cp, "如有问题可联系客服".lower(), ["如有问题可联系客服".lower()])
         self.assertEqual(m["status"], "partial")
+
+
+class TestSectionAware(unittest.TestCase):
+    """section-aware 修复验证：aux 命中位于章节标题时，把整节视为同一语境判 topic 共现。
+
+    修复 Step 1 引入的回归 C1/C1b/C2（标题含 aux、正文含 topic 被误判 missing），
+    同时章节隔离确保跨节 topic 不计入本节（不复活 Finding 1 虚假 partial）。
+    """
+
+    def _status(self, text, cp_id):
+        cps = load_checklists(_DATA, ["PIPL", "GDPR", "CSL", "DSL"])
+        cp = next(c for c in cps if c["id"] == cp_id)
+        return match_all([cp], text)[0][1]["status"]
+
+    # ---- 启发式：标题识别 ----
+    def test_heading_level_detection(self):
+        self.assertEqual(_heading_level("## 管理制度"), 2)
+        self.assertEqual(_heading_level("### 数据分类"), 3)
+        self.assertEqual(_heading_level("# 第一章 总则"), 1)
+        self.assertEqual(_heading_level("一、数据收集"), 2)
+        self.assertEqual(_heading_level("（一）告知义务"), 3)
+        self.assertEqual(_heading_level("第X条 删除权"), 3)
+        # 短行（<20 字）且不以标点结尾 → 疑似标题（level 5，保守默认）
+        self.assertEqual(_heading_level("数据收集"), 5)
+        # 长句或以标点结尾 → 非标题
+        self.assertEqual(_heading_level("我们处理个人数据。"), None)
+
+    # ---- 章节范围界定 ----
+    def test_section_text_basic(self):
+        paras = ["## 标题", "正文一", "## 下一节", "正文二"]
+        self.assertEqual(_section_text(paras, 0, 2), "## 标题\n正文一")
+
+    def test_section_text_multilevel_nesting(self):
+        # ## 下含 ### 子节：## 节应把 ### 子节及其正文纳入
+        paras = ["## 数据安全", "总述", "### 数据分类", "我们对重要数据分类"]
+        self.assertEqual(_section_text(paras, 0, 2), "## 数据安全\n总述\n### 数据分类\n我们对重要数据分类")
+
+    # ---- C1 / C1b / C2：标题含 aux、正文含 topic → partial（修复假阴性）----
+    def test_c1_heading_aux_body_topic_partial(self):
+        text = "## 管理制度\n我们处理重要数据。"
+        self.assertEqual(self._status(text, "DSL-21a"), "partial")
+
+    def test_c1b_heading_aux_body_topic_partial(self):
+        text = "## 管理岗位\n我们落实数据安全要求。"
+        self.assertEqual(self._status(text, "DSL-21b"), "partial")
+
+    def test_c2_multiline_heading_partial(self):
+        text = "## 数据安全管理制度\n我们处理重要数据，建立管控机制。"
+        self.assertEqual(self._status(text, "DSL-21a"), "partial")
+
+    # ---- 跨节隔离：aux 在 A 节标题、topic 在 B 节正文 → missing（不误判 partial）----
+    def test_cross_section_isolation_missing(self):
+        text = (
+            "## 访问管理制度\n我们建立了完善的用户访问流程。\n"
+            "## 数据安全管理\n我们对数据进行安全保护，落实数据安全要求。"
+        )
+        # aux「管理」仅命中 A 节标题；topic「数据安全」在 B 节正文，不在 A 节内 → 应 missing
+        self.assertEqual(self._status(text, "DSL-21b"), "missing")
+
+    # ---- 多层标题嵌套：aux 在 ## 标题、topic 在 ### 子节正文 → partial ----
+    def test_multilevel_nesting_partial(self):
+        text = (
+            "## 数据安全管理制度\n我们制定了总体规范。\n"
+            "### 重要数据保护\n我们对重要数据采取严格保护措施。"
+        )
+        self.assertEqual(self._status(text, "DSL-21a"), "partial")
+
+    # ---- Step 1 修复不丢：4 个 curated 项中文样例仍 missing（aux 在正文、同句无 topic）----
+    def test_curated_chinese_samples_still_missing(self):
+        cases = {
+            "CSL-21": "如您身处境外，我们可能向境外接收方提供数据，并已通过国家网信部门组织的安全评估。",
+            "DSL-21a": "我们处理您的个人数据，并采取了加密、去标识化等安全技术措施及访问管理制度，保障个人信息安全。",
+            "DSL-21b": "我们处理个人数据，已建立访问管理制度以保障安全。",
+            "DSL-29a": "如您身处境外，我们可能向境外接收方提供数据，并已通过国家网信部门组织的安全评估。",
+        }
+        for cp_id, text in cases.items():
+            with self.subTest(cp_id=cp_id):
+                self.assertEqual(self._status(text, cp_id), "missing")
 
 
 if __name__ == "__main__":

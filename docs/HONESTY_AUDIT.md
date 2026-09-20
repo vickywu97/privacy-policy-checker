@@ -315,39 +315,49 @@ python3 scripts/honesty_audit.py --policy demo/sample_privacy_policy_en.txt \
 | DSL-31 | 跨境 | 含"跨境"的句子普遍 |
 | DSL-32 | 收集 | 含"收集"的句子普遍 |
 
-### 10.5 句级约束假阴性验证（修正版：原"零假阴性"结论**不成立**）
+### 10.5 section-aware 修复验证（结论：**已修复** + 跨节隔离已测）
 
-> 用户质疑：句级约束 `aux 命中且同句有 topic → partial；无 → missing` 可能在「aux 在标题、topic 在正文（不同段落）」等场景误判 `missing`（假阴性），并指出上轮 §10.5 的"零假阴性"结论证据不足、且内部论断自相矛盾。
-> **用户的质疑成立，本段为修正记录。**
+> 用户裁决：验证质量合格，但"保持句级 + 标注限制"决策被驳回。理由——C1/C1b/C2 是 Step 1 **引入的回归**（非"已知限制"）；section-aware 同时修复假阴性且不复活 Finding 1，是更优解；甩给 Phase 2 会让 README 同时背两个"已知限制"叙事难看。故**现在实做 section-aware 修复**（不修改任何 `topic_terms` / `required_patterns` 数据，仅改 matcher 逻辑）。
 
-**修正 1 — 原论断 A 错误（`topic ⊆ required`）**：实测 4 个 curated 项的 `topic_terms − required_patterns` 差集**均非空**：
-- CSL-21：`['网络安全等级保护','网络安全防护']`
-- DSL-21a：`['重要数据','分类','分级']`
-- DSL-21b：`['数据安全']`
-- DSL-29a：`['风险','监测']`
+**修正 1 — 原论断 A 错误（`topic ⊆ required`）**（保留，已证实）：4 个 curated 项的 `topic_terms − required_patterns` 差集**均非空**：
+- CSL-21：`['网络安全等级保护','网络安全防护']`；DSL-21a：`['重要数据','分类','分级']`
+- DSL-21b：`['数据安全']`；DSL-29a：`['风险','监测']`
 
-即**存在"是 topic 但不是 required"的词**，会落到 aux 降级分支。原"凡含 topic 词先命中 core"的论断被 F2 用例（"网络安全防护"是 topic 非 required）证伪。
+即存在"是 topic 但不是 required"的词，会落到 aux 降级分支；原"凡含 topic 词先命中 core"被 F2（"网络安全防护"是 topic 非 required）证伪。
 
-**修正 2 — 原 F1–F4 用例未真正测试降级分支**：F1/F2 含 required 词→core 命中；F3 被 conditional 拦截；F4 是默认项（topic==aux，降级死代码）。四例均**未触达 aux 降级路径**，不能证明"零假阴性"。
+**修正 2 — 原 F1–F4 用例未触达降级分支**（保留）：F1/F2 含 required→core；F3 被 conditional 拦截；F4 默认项死代码。四例均未触达 aux 降级路径。
 
-**修正 3 — 存在真实假阴性（构造"标题含 aux、正文含 topic、二者不同段落、且无 required 词"）**：
+**修正 3 — 真实假阴性确认 + 修复**（关键变更）：
+C1/C1b/C2 三类结构（标题含 aux、正文含 topic、二者不同段落且无 required 词）在 Step 1 句级约束下被误判 `missing`，而 Step 1 **之前**（无 topic 约束）原判 `partial` → **确为 Step 1 引入的回归**，应在引入它的 Step 内修复，而非标注为"已知限制"。
 
-| 用例 | 配置 | 句级 | 段落级 | 文档级 | 是否假阴性 |
-|------|------|------|--------|--------|------------|
-| C1 `## 管理制度` / `我们处理重要数据。` | DSL-21a | **missing** | missing | partial | **是** |
-| C1b `## 管理岗位` / `我们落实数据安全要求。` | DSL-21b | **missing** | missing | partial | **是** |
-| C2 `## 数据安全管理制度` / `我们处理重要数据，建立管控机制。` | DSL-21a | **missing** | missing | partial | **是** |
+**修复方案（matcher 逻辑，零依赖、不引入 NLP/模型）**：
+- `_heading_level(line)`：启发式识别标题——`#..#` markdown / `一、` `（一）` `第X章` `第X条` 中文序号 / 短行(<20 字)且不以标点结尾；返回层级（越小越高级），非标题返回 None。
+- `_section_text(paras, aidx, level)`：自 `aidx`（层级 `level` 标题）起取整节，直至下一层级 ≤ `level` 的标题前（同级/高级开新节；低级子节纳入本节）。
+- aux 分支：aux 命中在**标题行** → 整节范围内判 topic 共现（含 → `partial`，不含 → `missing`）；aux 命中在**正文** → 保持句级（`_aux_in_para_topic`，仅判当前段落）。
 
-> 根因：aux 原子（如"制度"/"管理"）落在标题段落，topic 词（如"重要数据"/"数据安全"）落在正文段落；句级/段落级约束下 aux 命中句不含 topic → 降级 `missing`。但这类写法（章节标题 + 正文）是真实隐私政策的常见结构，且 Step 1 **之前**（无 topic 约束）这些用例判 `partial`，故 Step 1 对"标题-正文分离"结构**引入了回归**。
-> 脆弱面：DSL-21a（topic-only 词"重要数据"不含 aux 原子）、DSL-21b（topic-only 词"数据安全"不含 aux 原子）可被干净分离；CSL-21/DSL-29a 的 topic-only 词（"网络安全防护"/"风险"）内嵌 aux 原子，较难构造干净分离，故相对稳健。
+**6 个验收用例实际判定（matcher 实测，全绿）**：
 
-**4 个 curated 项在中文样例中的状态（对照）**：`topic_locs` 均为空（样例全文无任一 topic 词），故句级/段落级/文档级**均 `missing`**（正确——样例确实未覆盖这些项）。注意：文档级之所以未把 4 项翻转回 `partial`，仅因**本样例**恰好无 topic 词；对任意"在远处章节提到 topic、在另一章节误用 aux"的政策，文档级会重新引入 Finding 1 的虚假 `partial`，故文档级放宽**不安全**。
+| 用例 | 配置 | 修复前 | 修复后 | 预期 |
+|------|------|--------|--------|------|
+| C1 | DSL-21a `## 管理制度` / `我们处理重要数据。` | missing | **partial** | partial OK |
+| C1b | DSL-21b `## 管理岗位` / `我们落实数据安全要求。` | missing | **partial** | partial OK |
+| C2 | DSL-21a `## 数据安全管理制度` / `我们处理重要数据，建立管控机制。` | missing | **partial** | partial OK |
+| 跨节隔离 | DSL-21b aux 在 A 节标题、topic 在 B 节正文 | — | **missing** | missing OK |
+| 多层嵌套 | DSL-21a `##` 下 `###`，topic 在子节正文 | — | **partial** | partial OK |
+| 4 curated 中文样例 | CSL-21 / DSL-21a / DSL-21b / DSL-29a 各自原中文样例 | missing | **missing** | missing OK（Step 1 修复不丢） |
 
-**结论与决策**：
-1. 句级约束**确实引入可观测假阴性**（C1/C1b/C2），原"零假阴性"结论撤回。
-2. 放宽粒度实测：段落级**修不了**假阴性（标题≠正文段落）；文档级能修但**复活 Finding 1 虚假 partial**，不可用。
-3. **决策：保持句级约束，不修改 matcher**（与用户预设 fallback「放宽会翻转 4 条则保持句级 + 标注限制」一致——此处段落级未翻转 4 条且文档级不安全）。
-4. **须在 README / 本报告标注已知限制**："aux 词在标题、topic 词在正文且分属不同段落时，保守判 `missing`，需人工复核。"该限制偏向保守（宁 missing 不夸 partial），对合规工具属安全失败方向。
-5. **更优 targeted fix（待用户拍板，非本次执行）**：section-aware——若 aux 命中位于章节标题，将该标题所统领的整节（标题+后续正文直至下一标题）视为同一语境，再判 topic 是否共现。该方案可修复 C1/C1b/C2 且**不**复活 Finding 1（跨节仍隔离）。属 Phase 2 候选。
+> 跨节隔离验证要点：aux 在 A 节标题、topic 在 B 节正文时，section 范围止于 B 标题，**不含 B 节正文** → 整节无 topic → `missing`，确认**不复活 Finding 1 虚假 partial**。多层嵌套验证：`###` 子节（level 3）被 `##` 节（level 2）纳入，topic 在子节正文仍被捕获 → `partial`，证明 section 聚合正确。
 
-> 元教训（本会话反复出现）：下结论前必须让用例**真正触达被测代码路径**；F1–F4 未触达降级分支即断言"零假阴性"，属"验证不充分包装成验证完成"。
+**结论与决策（更新）**：
+1. C1/C1b/C2 假阴性**已修复**（section-aware，非标注限制）。
+2. 文档级/段落级放宽**仍不安全**（结论保留）；section-aware 因章节隔离规避了文档级复活 Finding 1 的问题。
+3. **现有 32 项测试全绿 + 新增 9 项 section-aware 测试（标题识别 / 章节范围 / 跨节隔离 / 多层嵌套 / 中文样例不回归）全绿**，共 41 项。
+4. 未修改任何 `topic_terms` / `required_patterns` 数据，仅改 matcher 逻辑（符合"只改逻辑"约束）。
+5. 该回归**未**写入 README「已知限制」（原拟议方案被驳回）；README 仅在 Step 2 补英文支持声明。
+
+> 元教训（本会话三重复现的模式）：AI 倾向于给出"看起来合理"而非"正确"的结论——
+> (1) 能力缺口包装成克制（英文政策 / oss 英文支持）；
+> (2) 验证不充分包装成验证完成（"零假阴性"未触达降级分支）；
+> (3) 新引入的回归包装成已知限制（"保持句级 + 标注限制"）。
+> 前两次由 WorkBuddy 自查发现，第三次由用户拦截；判定前必须让用例**真正触达被测路径**，并对照"引入者即修复者"原则——自己引入的回归不能在同一步甩锅给"已知限制"。
+
