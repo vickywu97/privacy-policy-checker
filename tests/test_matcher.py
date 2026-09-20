@@ -81,5 +81,75 @@ class TestNegationContext(unittest.TestCase):
         self.assertEqual(self._status(text, "CSL-43"), "missing")
 
 
+class TestFinding1TopicTerms(unittest.TestCase):
+    """Finding 1 (P0) 验证：aux 命中但同句无主题词 → 降级 missing；有主题词 → 保留 partial。
+
+    被证实的 4 个 aux 过度宽泛错配检查项（CSL-21 / DSL-21a / DSL-21b / DSL-29a），
+    修复后应全部由 partial 转为 missing。注意 DSL-29a 的 risk_if_missing=medium，
+    故转为 missing(medium) 而非 high（审计报告此处曾误写为 high）。
+    """
+
+    def _status(self, text, cp_id):
+        cps = load_checklists(_DATA, ["PIPL", "GDPR", "CSL", "DSL"])
+        cp = next(c for c in cps if c["id"] == cp_id)
+        return match_all([cp], text)[0][1]["status"]
+
+    def test_csl21_downgraded_to_missing(self):
+        # 「安全」仅命中在跨境「安全评估」句，无等保主题词 → 降级 missing（high）
+        text = "如您身处境外，我们可能向境外接收方提供数据，并已通过国家网信部门组织的安全评估。"
+        self.assertEqual(self._status(text, "CSL-21"), "missing")
+
+    def test_dsl21a_downgraded_to_missing(self):
+        # 「制度」仅命中在「访问管理制度」句，无分类分级主题词 → 降级 missing（high）
+        text = "我们处理您的个人数据，并采取了加密、去标识化等安全技术措施及访问管理制度，保障个人信息安全。"
+        self.assertEqual(self._status(text, "DSL-21a"), "missing")
+
+    def test_dsl21b_downgraded_to_missing(self):
+        # 「管理」仅命中在「访问管理制度」句，无数据安全负责人主题词 → 降级 missing（high）
+        text = "我们处理个人数据，已建立访问管理制度以保障安全。"
+        self.assertEqual(self._status(text, "DSL-21b"), "missing")
+
+    def test_dsl29a_downgraded_to_missing_medium(self):
+        # 「安全」仅命中在跨境「安全评估」句，无风险监测主题词 → 降级 missing（medium，非 high）
+        text = "如您身处境外，我们可能向境外接收方提供数据，并已通过国家网信部门组织的安全评估。"
+        self.assertEqual(self._status(text, "DSL-29a"), "missing")
+
+    def test_topic_present_retains_partial(self):
+        # 同句含主题词「等保」→ 保留 partial（不降级）
+        cp = {
+            "id": "T-TOPIC", "law": "PIPL", "article": "X", "category": "c",
+            "checkpoint": "落实等保", "criteria": "c",
+            "required_patterns": ["xyz_nonexistent_core"],
+            "context_patterns": ["安全"],
+            "topic_terms": ["等保", "等级保护"],
+            "conditional_keywords": [],
+            "risk_if_missing": "high",
+        }
+        text = "我们按照网络安全等级保护制度做好了安全防护工作".lower()
+        m = match(cp, text, [text])
+        self.assertEqual(m["status"], "partial")
+
+    def test_topic_absent_downgrades_to_missing(self):
+        # 同句无主题词「等保」→ 降级 missing
+        cp = {
+            "id": "T-NO", "law": "PIPL", "article": "X", "category": "c",
+            "checkpoint": "落实等保", "criteria": "c",
+            "required_patterns": ["xyz_nonexistent_core"],
+            "context_patterns": ["安全"],
+            "topic_terms": ["等保", "等级保护"],
+            "conditional_keywords": [],
+            "risk_if_missing": "high",
+        }
+        text = "我们已通过国家网信部门组织的安全评估".lower()
+        m = match(cp, text, [text])
+        self.assertEqual(m["status"], "missing")
+
+    def test_no_topic_terms_backward_compatible(self):
+        # 无 topic_terms 字段 → 维持原 partial 行为，不降级
+        cp = dict(_CP, required_patterns=["xyz_nonexistent_xyz"])
+        m = match(cp, "如有问题可联系客服".lower(), ["如有问题可联系客服".lower()])
+        self.assertEqual(m["status"], "partial")
+
+
 if __name__ == "__main__":
     unittest.main()

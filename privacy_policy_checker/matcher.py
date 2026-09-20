@@ -11,7 +11,9 @@
 2. 核心词 / 辅助词分离：
    - core_patterns（缺省回退 required_patterns）命中 → satisfied；
      证据取自真正含该词的段落，避免把「保存期限自动删除」误归为「删除权」。
-   - aux_patterns（缺省回退 context_patterns）仅命中 → partial（低置信，需人工复核）。
+   - aux_patterns（缺省回退 context_patterns）仅命中 → partial（低置信，需人工复核）；
+     但若检查项带 `topic_terms`，且所有 aux 命中均落在**不含主题词**的句子中，
+     则视为虚假命中，降级为 missing（诚实性审计 Finding 1 / P0：避免把无关句中的泛型词粉饰成 partial）。
 3. 否定语境检测：命中词紧邻否定词（不/不会/not/...）时该次命中作废，
    继续寻找其他非否定出现；全为否定则视为未命中（避免「我们不提供 X」被误判为满足）。
 4. 段落证据归因：返回第一个含非否定命中的段落（core 优先于 aux）。
@@ -59,6 +61,44 @@ def _negated_in_clause(para_lower, idx):
     eff = (window.replace("未来", "").replace("未知", "").replace("未必", "")
                  .replace("未遂", "").replace("未免", "").replace("未婚", ""))
     return any(m in eff for m in NEGATION_MARKERS)
+
+
+# 句子切分：以句末标点或换行为界（「；」亦视为句界，避免跨句误归因）。
+_SENT_END = re.compile(r"[。！？!?；;\n]")
+
+
+def _sentence_containing(para_lower, idx):
+    """返回包含 idx 的「句子」子串（句末标点 / 换行切分）。"""
+    start = 0
+    for m in _SENT_END.finditer(para_lower[:idx]):
+        start = m.end()
+    end = len(para_lower)
+    for m in _SENT_END.finditer(para_lower[idx:]):
+        end = idx + m.start()
+        break
+    return para_lower[start:end]
+
+
+def _any_aux_hit_with_topic(aux, paragraphs_lower, topic):
+    """扫描全部段落：若存在某个非否定 aux 命中，且其所在句子含任一 topic_terms，返回 True。
+
+    用于抑制「aux 词在无关句子中命中」造成的虚假 partial（诚实性审计 Finding 1 / P0）：
+    仅当 aux 命中落在含本检查项主题词的同一句时，才保留 partial；否则视为未满足（降级 missing）。
+    """
+    for para in paragraphs_lower:
+        for pat in aux:
+            pl = pat.lower()
+            start = 0
+            while True:
+                idx = para.find(pl, start)
+                if idx == -1:
+                    break
+                if not _negated_in_clause(para, idx):
+                    sent = _sentence_containing(para, idx)
+                    if any(t.lower() in sent for t in topic):
+                        return True
+                start = idx + 1
+    return False
 
 
 def _hit_in_paragraph(para_lower, patterns):
@@ -129,6 +169,16 @@ def match(checkpoint, text_lower, paragraphs_lower, paragraphs_original=None):
 
     ap, aidx = _find(aux, paragraphs_lower)
     if ap is not None:
+        # Finding 1 / P0：aux 命中但全句无主题词 → 视为虚假命中，降级 missing
+        topic = checkpoint.get("topic_terms") or []
+        if topic and not _any_aux_hit_with_topic(aux, paragraphs_lower, topic):
+            return {
+                "status": "missing",
+                "evidence": _evidence(paragraphs_original[aidx], paragraphs_lower[aidx]),
+                "matched_pattern": None,
+                "reason": "辅助词“%s”仅在未出现本检查项主题词（%s）的句子中命中，视为未满足"
+                         % (ap, " / ".join(topic[:3])),
+            }
         return {
             "status": "partial",
             "evidence": _evidence(paragraphs_original[aidx], paragraphs_lower[aidx]),
