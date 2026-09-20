@@ -129,7 +129,7 @@
   - [x] **能力缺口**：aux 词「安全」在「安全评估」中命中，错配为「风险监测」的部分满足证据。
 - **修复方案**：同上。
 
-**Audit B 小结**：4/4 全为能力缺口（aux 过度宽泛导致证据错配）。这是一致性 bug——同一段"安全评估/访问管理制度"被错配给 4 个不同检查项。修复后预计这 4 条将转为 `missing`（high），风险由 medium 升回 high——**可见当前报告把这些缺口"粉饰"成了 partial，低估了真实风险**。
+**Audit B 小结**：4/4 全为能力缺口（aux 过度宽泛导致证据错配）。这是一致性 bug——同一段"安全评估/访问管理制度"被错配给 4 个不同检查项。修复后预计 CSL-21/DSL-21a/DSL-21b 将转为 `missing(high)`、DSL-29a 将转为 `missing(medium)`（其 `risk_if_missing=medium`，非 high）；CSL-21/DSL-21a/DSL-21b 风险由 medium 升回 high——**可见当前报告把这些缺口"粉饰"成了 partial，低估了真实风险**。
 
 ---
 
@@ -191,7 +191,7 @@ CSL-21/37（等保、CII 境内存储，中国专有）、CSL-24（实名，中�
   - [ ] 能力缺口
 - **结论**：判定正确，无粉饰。
 
-（其余 high 缺失仅此 1 条；CSL-21/DSL-21a/21b/29a 的 high 风险经 Audit B 证实为 partial 错配，真实应为 missing high——见 §3。）
+（其余 high 缺失仅此 1 条；CSL-21/DSL-21a/DSL-21b 的 high 风险经 Audit B 证实为 partial 错配，真实应为 missing(high)；DSL-29a 同为 partial 错配但 `risk_if_missing=medium`，真实应为 missing(medium)——见 §3、§10.3。）
 
 ---
 
@@ -209,7 +209,7 @@ CSL-21/37（等保、CII 境内存储，中国专有）、CSL-24（实名，中�
 | 1 | CSL-21 partial | partial→应为 missing | 能力缺口 | aux「安全」错配自跨境安全评估句 |
 | 2 | DSL-21a partial | partial→应为 missing | 能力缺口 | aux「制度」错配自访问管理制度句 |
 | 3 | DSL-21b partial | partial→应为 missing | 能力缺口 | aux「管理」错配自访问管理制度句 |
-| 4 | DSL-29a partial | partial→应为 missing | 能力缺口 | aux「安全」错配自跨境安全评估句 |
+| 4 | DSL-29a partial | partial→应为 missing(medium) | 能力缺口 | aux「安全」错配自跨境安全评估句（注：risk_if_missing=medium，非 high） |
 | 5 | 英文政策 PIPL-17-1 | missing→应为 satisfied | 能力缺口 | 英文"Controller/Co., Ltd."未入 required |
 | 6 | 英文政策 PIPL-23/24/29/30/31/55/57 | not_applicable→应为 satisfied | 能力缺口 | 中文 conditional 缺英文同义词 |
 | 7 | 英文政策 CSL-43 等 | not_applicable/missing | 能力缺口 | 中文关键词缺英文同义词 |
@@ -233,7 +233,7 @@ CSL-21/37（等保、CII 境内存储，中国专有）、CSL-24（实名，中�
 **P1 — partial 证据错配（aux 过度宽泛）**
 - 收紧 `aux_patterns`：移除「安全」「制度」「管理」「风险」等超泛型单/双字；改用语义短语（「等级保护」「分类分级」「风险监测」）。
 - 或增加"aux 须与 core 同句/同段"约束，杜绝跨语境误归因。
-- 修复后：CSL-21/DSL-21a/21b/29a 由 partial 转为 missing（high），风险如实上升。
+- 修复后：CSL-21/DSL-21a/DSL-21b 由 partial 转为 missing(high)；DSL-29a 转为 missing(medium)（其 `risk_if_missing=medium`）。风险如实上升。
 
 **P2 — conditional 门禁与 core 一致性**
 - 确保 `conditional_keywords` 是 `required_patterns`/`core_patterns` 的超集语义；避免"required 含英文但 conditional 仅中文"导致门禁误杀（如 GDPR-8 / PIPL-31）。
@@ -265,9 +265,10 @@ python3 scripts/honesty_audit.py --policy demo/sample_privacy_policy_en.txt \
 
 ### 10.1 修复方式
 - `scripts/add_topic_terms.py`：为四个检查项库（PIPL/GDPR/CSL/DSL 共 87 条）**每条**补充 `topic_terms` 字段。
-  - 4 个被证实错配项（CSL-21 / DSL-21a / DSL-21b / DSL-29a）写入**收窄到本检查项主题域**的主题词；
-  - 其余条目 `topic_terms` 默认取自身 `context_patterns`（aux ⊆ context，故 aux 命中的句子必然含 context 词 = topic，**行为向后兼容，不降级**）。
+  - 4 个被证实错配项（CSL-21 / DSL-21a / DSL-21b / DSL-29a）写入**收窄到本检查项主题域**的主题词（刻意不含触发错配的泛型 aux 词本身，故 aux 命中句未必含主题词 → 可触发降级）；
+  - 其余 83 条 `topic_terms` 默认取自身 `context_patterns`（**逐字相同，零收窄**）。
 - `matcher.py`：新增 `_sentence_containing` / `_any_aux_hit_with_topic`；在 aux-only 分支，若检查项带 `topic_terms` 且**所有 aux 命中均落在不含主题词的句子**中 → 降级为 `missing`（不再粉饰成 partial）。
+- **范围边界（重要，诚实声明）**：经核查，全库 87 条均满足 `aux ⊆ context`，且 83 条默认项的 `topic_terms == context_patterns == aux`，故降级分支对那 83 条是**死代码——行为与原先完全一致，零变化**。本修复**仅覆盖 4 个已逐条确认的错配案例**，属**针对性修补（targeted patch），非系统性修复**。其余 83 条（其中 21 条的匹配词含「收集/使用/处理/同意/安全」等泛型原子）仍携带同类 aux 过度宽泛的潜在能力缺口，待 Phase 2 逐条排查；**本项目任何文档不得表述为"系统性修复了 aux 过度宽泛问题"**，只能写"修复了已发现的 4 个案例，其余同类风险将在 Phase 2 逐步排查"。
 
 ### 10.2 验证结果（中文样例 `demo/sample_privacy_policy.txt`）
 
@@ -284,3 +285,4 @@ python3 scripts/honesty_audit.py --policy demo/sample_privacy_policy_en.txt \
 
 ### 10.3 审计结论更正
 - 原报告 §5 / §7 称 CSL-21/DSL-21a/21b/29a 均应转为 `missing(high)`——其中 DSL-29a 实际 `risk_if_missing=medium`，修复后为 `missing(medium)`。此更正不影响「4 条均为能力缺口、且 partial 低估了真实风险」的核心结论。
+- **范围澄清（回应设计疑点）**：`aux ⊆ context` 在全库 87 条均成立，故 83 条默认项的 `topic_terms == context_patterns == aux`，降级分支对它们是死代码、行为零变化。本修复是**针对性修补**，非系统性修复；其余 83 条（21 条含泛型原子）的同类 aux 过度宽泛风险仍待 Phase 2 排查。详见 §10.1「范围边界」。
