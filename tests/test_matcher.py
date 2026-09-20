@@ -156,6 +156,44 @@ class TestFinding1TopicTerms(unittest.TestCase):
         self.assertEqual(m["status"], "partial")
 
 
+class TestBodySentenceLevel(unittest.TestCase):
+    """正文场景粒度验证（Concern 1）：aux 命中在正文 → **句级**约束，绝不放宽到段落级。
+
+    同一段落内不同句子的 aux / topic 不相互影响；仅当 aux 命中句本身含 topic 才 partial，
+    否则 missing。这保证 Step 1 的 Finding 1（抑制无关句中的泛型 aux 词粉饰成 partial）
+    不被 section-aware 修复反向复活。
+    """
+
+    def _cp(self):
+        return {
+            "id": "T-BODY", "law": "PIPL", "article": "X", "category": "c",
+            "checkpoint": "落实等保", "criteria": "c",
+            "required_patterns": ["xyz_nonexistent_core"],
+            "context_patterns": ["安全"],
+            "topic_terms": ["等级保护", "等保"],
+            "conditional_keywords": [],
+            "risk_if_missing": "high",
+        }
+
+    def test_sentence_level_keeps_missing_when_topic_in_other_sentence(self):
+        # aux「安全」在句1，topic「等级保护」在句2（同段落、无空行）→ 句级判 missing
+        text = "我们进行数据跨境安全评估。我们遵守等级保护要求。"
+        m = match(self._cp(), text.lower(), [text.lower()])
+        self.assertEqual(m["status"], "missing")
+
+    def test_sentence_level_irrelevant_topic_in_other_sentence(self):
+        # aux「安全」在句1，topic「等级保护」在句2 但与句1 无关 → 仍 missing（段落级会误判 partial）
+        text = "我们进行安全评估。会议讨论了等级保护改革方向。"
+        m = match(self._cp(), text.lower(), [text.lower()])
+        self.assertEqual(m["status"], "missing")
+
+    def test_sentence_level_partial_when_topic_in_same_sentence(self):
+        # aux 与 topic 同句 → partial（验证句级正确保留真 partial）
+        text = "我们已按照等级保护要求完成安全评估。"
+        m = match(self._cp(), text.lower(), [text.lower()])
+        self.assertEqual(m["status"], "partial")
+
+
 class TestSectionAware(unittest.TestCase):
     """section-aware 修复验证：aux 命中位于章节标题时，把整节视为同一语境判 topic 共现。
 
@@ -170,16 +208,39 @@ class TestSectionAware(unittest.TestCase):
 
     # ---- 启发式：标题识别 ----
     def test_heading_level_detection(self):
+        # 强信号（markdown / 中文序号 / 第X章 / 第X条）：不受相邻行约束，始终识别为标题
         self.assertEqual(_heading_level("## 管理制度"), 2)
         self.assertEqual(_heading_level("### 数据分类"), 3)
         self.assertEqual(_heading_level("# 第一章 总则"), 1)
         self.assertEqual(_heading_level("一、数据收集"), 2)
         self.assertEqual(_heading_level("（一）告知义务"), 3)
         self.assertEqual(_heading_level("第X条 删除权"), 3)
-        # 短行（<20 字）且不以标点结尾 → 疑似标题（level 5，保守默认）
-        self.assertEqual(_heading_level("数据收集"), 5)
         # 长句或以标点结尾 → 非标题
         self.assertEqual(_heading_level("我们处理个人数据。"), None)
+        # 弱信号：短行无标点 → 仅在「上一行空行/文件开头」且「下一行非空」时判为疑似标题
+        # 文件开头 + 下一行非空 → level 5
+        self.assertEqual(_heading_level("数据收集", prev_line=None, next_line="我们处理数据。"), 5)
+        # 上一行是空行 + 下一行非空 → level 5
+        self.assertEqual(_heading_level("数据收集", prev_line="", next_line="我们处理数据。"), 5)
+        # 上一行是正文（非空）→ 即便下一行非空也不判标题
+        self.assertEqual(_heading_level("数据收集", prev_line="前文内容。", next_line="我们处理数据。"), None)
+        # 下一行是空行 → 不满足「下一行非空」→ 不判标题
+        self.assertEqual(_heading_level("数据收集", prev_line=None, next_line=""), None)
+
+    def test_short_line_list_items_not_heading(self):
+        # 用户指出的真实风险：列表项（姓名/手机号/邮箱）短行无标点，旧启发式会误判为标题。
+        # 此处三者上一行均为「我们收集以下信息：」（非空），故一律非标题。
+        block = ["我们收集以下信息：", "姓名", "手机号", "邮箱"]
+        for i, line in enumerate(block):
+            prev = block[i - 1] if i > 0 else None
+            nxt = block[i + 1] if i + 1 < len(block) else None
+            with self.subTest(line=line):
+                self.assertIsNone(_heading_level(line, prev_line=prev, next_line=nxt))
+
+    def test_short_line_leading_colon_not_heading(self):
+        # 引导句「我们收集以下信息：」以标点结尾 → 直接排除（无论上一行）
+        self.assertIsNone(_heading_level("我们收集以下信息：", prev_line=None, next_line="姓名"))
+        self.assertIsNone(_heading_level("我们收集以下信息：", prev_line="前文。", next_line="姓名"))
 
     # ---- 章节范围界定 ----
     def test_section_text_basic(self):

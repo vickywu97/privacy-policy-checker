@@ -83,11 +83,14 @@ def _sentence_containing(para_lower, idx):
     return para_lower[start:end]
 
 
-def _aux_in_para_topic(para_lower, aux, topic):
-    """句级约束（Finding 1 / P0）：段落 `para_lower` 内若存在非否定 aux 命中，且**该命中所在句子**
-    含任一 topic_terms，返回 True（保留 partial）；否则 False（降级 missing）。
+def _aux_in_sentence_topic(para_lower, aux, topic):
+    """句级约束（Finding 1 / P0）：段落 `para_lower` 内若存在非否定 aux 命中，且**该命中所在「句子」**
+    （句末标点 / 换行切分，见 `_sentence_containing`）含任一 topic_terms，返回 True（保留 partial）；
+    否则 False（降级 missing）。
 
-    仅判当前段落（与「aux 命中在正文 → 保持句级」一致），不跨段落扩散。
+    粒度 = **句级（非段落级）**：同一段落内不同句子的 aux / topic 不相互影响。
+    例如同一段落「句1 含 aux、句2 含 topic 但二者无关」→ 仍判 missing，避免 Finding 1 虚假 partial
+    复活。不跨段落扩散。
     """
     for pat in aux:
         pl = pat.lower()
@@ -107,9 +110,10 @@ def _aux_in_para_topic(para_lower, aux, topic):
 # 章节标题识别（启发式，零依赖，不引入 NLP/模型）：
 #  - 行首 #..#（markdown 标题）
 #  - 行首 一、 / （一） / 第X章 / 第X条（中文序号标题）
-#  - 短行（<20 字）且不以标点结尾（疑似标题）
+#  - 弱信号：短行（<20 字）且不以标点结尾（疑似标题）→ 仅在「上一行是空行或文件开头」且
+#    「下一行是非空行」时成立，避免把列表项（姓名/手机号/邮箱）、引导句误判为标题。
 # 返回标题层级（整数，越小越「高级」），非标题返回 None。
-def _heading_level(line_lower):
+def _heading_level(line_lower, prev_line=None, next_line=None):
     s = line_lower.strip()
     if not s:
         return None
@@ -124,8 +128,13 @@ def _heading_level(line_lower):
         return 2
     if re.match(r"^（[一二三四五六七八九十]+）", s):
         return 3
+    # 弱信号：短行无标点 → 疑似标题；但需「上一行空行/文件开头」且「下一行非空」，
+    # 否则列表项 / 引导句（如「姓名」「我们收集以下信息：」）会被误判。
     if len(s) < 20 and s[-1] not in "。！？!?；;，、：:.…":
-        return 5
+        prev_blank = prev_line is None or prev_line.strip() == ""
+        next_nonblank = next_line is not None and next_line.strip() != ""
+        if prev_blank and next_nonblank:
+            return 5
     return None
 
 
@@ -137,7 +146,11 @@ def _section_text(paragraphs_lower, aidx, level):
     """
     end = len(paragraphs_lower)
     for j in range(aidx + 1, len(paragraphs_lower)):
-        lvl = _heading_level(paragraphs_lower[j])
+        lvl = _heading_level(
+            paragraphs_lower[j],
+            paragraphs_lower[j - 1] if j > 0 else None,
+            paragraphs_lower[j + 1] if j + 1 < len(paragraphs_lower) else None,
+        )
         if lvl is not None and lvl <= level:
             end = j
             break
@@ -219,7 +232,10 @@ def match(checkpoint, text_lower, paragraphs_lower, paragraphs_original=None):
         # 又因章节隔离而不复活 Finding 1 虚假 partial（跨节 topic 不计入本节）。
         topic = checkpoint.get("topic_terms") or []
         if topic:
-            lvl = _heading_level(paragraphs_lower[aidx])
+            lvl = _heading_level(
+                paragraphs_lower[aidx],
+                paragraphs_lower[aidx - 1] if aidx > 0 else None,
+            )
             if lvl is not None:
                 section = _section_text(paragraphs_lower, aidx, lvl)
                 if any(t.lower() in section for t in topic):
@@ -237,8 +253,8 @@ def match(checkpoint, text_lower, paragraphs_lower, paragraphs_original=None):
                     "reason": "辅助词“%s”仅在本节标题命中，整节正文未出现本检查项主题词（%s），视为未满足"
                              % (ap, " / ".join(topic[:3])),
                 }
-            # aux 命中在正文 → 句级约束（原 Finding 1 行为：同句含主题词才 partial）
-            if not _aux_in_para_topic(paragraphs_lower[aidx], aux, topic):
+            # aux 命中在正文 → 句级约束（原 Finding 1 行为：同句含主题词才 partial，绝不放宽到段落级）
+            if not _aux_in_sentence_topic(paragraphs_lower[aidx], aux, topic):
                 return {
                     "status": "missing",
                     "evidence": _evidence(paragraphs_original[aidx], paragraphs_lower[aidx]),
