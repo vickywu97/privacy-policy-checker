@@ -383,6 +383,8 @@ C1/C1b/C2 三类结构（标题含 aux、正文含 topic、二者不同段落且
 - 分支可达性诊断：good demo 有 **13 个** item 的 aux 命中落在标题段落、bad demo 有 **1 个**（CSL-22）触达 heading-aware 分支——**分支确被真实触发**，但本 demo 中这些 item 的 topic 原子与 aux 原子共置（标题里就有 topic），或整节无 topic → 新旧结果一致，故无翻转。即"零变化"是**保守结果**，非"未触发"。
 - **结论：4 个 curated 之外的项在完整 demo 上零翻转**，无需要逐条解释的非预期变化。section-aware 仅对"aux 在标题、topic 在节内正文"的结构改变判定（由 C1/C1b/C2 验证），而真实 demo 不含该结构。
 
+**可复现 fixture（Step 2 补充）**：新增 `demo/sample_privacy_policy_sectioned.txt`，刻意构造「标题含 aux、正文含 topic」结构（DSL-21a 的 C1 / C2 两类）。用 `git show 2bdf65b:matcher.py`（Step 1 基线）跑该 fixture 得 `DSL-21a = missing`，当前 matcher 跑得 `DSL-21a = partial`——即 section-aware 修复价值可直接复现，不再仅存于单元测试。注意：CSL-21 / DSL-29a 的 topic 词内嵌 aux 原子（如「网络安全等级保护」含「安全」），无法干净分离；DSL-21b 的 topic 词「重要数据」恰为 DSL-21a 的 required 词，单文件演示会被跨项满足——故该 fixture 以 DSL-21a 为干净的演示主体，DSL-21b 翻转由 `test_c1b_heading_aux_body_topic_partial` 锁定。
+
 > 元教训（本会话四重复现的模式）：AI 倾向于给出"看起来合理"而非"正确"的结论——
 > (1) 能力缺口包装成克制（英文政策 / oss 英文支持）；
 > (2) 验证不充分包装成验证完成（"零假阴性"未触达降级分支）；

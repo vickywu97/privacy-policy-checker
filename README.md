@@ -4,6 +4,8 @@
 [![Python 3.8+](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
+> **语言支持状态（英文）**：当前检查项库以中文关键词为主。英文覆盖统计（共 87 条检查项）：含英文 `required_patterns` 的有 **45 条（51.7%）**，但分布极不均——**GDPR 40/40 已系统性含英文同义词**，**PIPL 仅 5/31、CSL 0/8、DSL 0/8 几乎无英文**。因此**纯英文隐私政策易产生假阴性**：PIPL / CSL / DSL 相关合规章节可能被误判为 `not_applicable` 或 `missing`（属「能力缺口」，非保守克制）。完整英文支持（补齐中文法条的英文同义词）列入 **Phase 2 路线图**。可复现验证见 `demo/sample_privacy_policy_en.txt` 与 `docs/HONESTY_AUDIT.md §4（英文隐私政策能力缺口）`。
+
 **离线隐私政策合规体检器** —— 输入一段隐私政策文本，对照 PIPL（个人信息保护法）、GDPR、网络安全法（CSL）、数据安全法（DSL）的检查项库逐条核验，输出缺口清单 + 风险分级 + 条文级证据。
 
 > 一句话定位：律师与合规团队之间的「隐私政策翻译器」。通用 AI 会编造法条（已被 `legal-hallucination-bench` 证明不可靠），这个工具只用确定的关键词匹配 + 法条原文，零 LLM 依赖、离线、可复现。
