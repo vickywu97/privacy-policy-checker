@@ -89,6 +89,37 @@ python -m privacy_policy_checker --file policy.txt --format json -o report.json
 
 ---
 
+## 已知缺口（Known Gaps）
+
+本工具为求职作品集，非商用产品。诚实性审计记录于 [`docs/HONESTY_AUDIT.md`](docs/HONESTY_AUDIT.md)：共 **5 项**缺口记录；另有 **2 类**经逐条核验确认为**真克制**（不是缺口）。
+
+**第 1 项（项目级局限）**：**当前无真实案例回归** —— 审计使用的两份样例政策（`demo/sample_privacy_policy.txt`、`demo/sample_privacy_policy_en.txt`）**均为构造性文本**（后者为刻意构造的「完全合规」英文政策）。构造性验证只能证明「代码在特定输入下行为正确」，**不能**证明在真实世界政策下正确。
+
+**状态三分**：
+
+| 状态 | 数量 | 说明 |
+|------|------|------|
+| ✅ 已修复 | **2 项** | ① `partial` 证据错配 4 例（CSL-21 / DSL-21a / 21b / 29a）；② section-aware 修复 C1 / C1b / C2 假阴性回归 |
+| 🔒 已测试锁定（`expectedFailure`） | **0 项** | 本仓未用 xFail 锁定缺口；缺口由 `scripts/honesty_audit.py` 复现 |
+| 📝 仅记录（无测试） | **3 项** | ① 英文同义词缺口（P0）；② 21 条含泛型原子的检查项（Phase 2 backlog）；③ `conditional` 门禁与 core 一致性 |
+
+> 另有 2 类经逐条核验确认为**真克制**（非缺口）：中文政策 11 条 `not_applicable`（`conditional_keywords` 确无命中）、DSL-29b `missing(high)`（政策确未提及应急预案）。
+
+**修复路线图**：
+
+| 优先级 | 项 | 时间承诺 |
+|--------|-----|---------|
+| **Phase 1（高）** | 英文同义词缺口 —— 为 87 条检查项补齐英文 `conditional_keywords` / `required_patterns`（当前一份**完全合规**的英文政策被判出 12 个 high） | 下个 release 前 |
+| **Phase 2（中）** | 21 条含泛型原子（「安全」「管理」「同意」「收集」等）的检查项逐条收窄 | 后续 |
+| **Phase 3（设计复核）** | `conditional` 门禁与 core 一致性；为中国法专有条目增加 `applicability_hint` | 长期 |
+| **不承诺修复** | 11 条中文 `not_applicable`、DSL-29b —— 经核验为真克制，非缺口 | 记录即可 |
+
+> ⚠️ **范围澄清（本项目任何文档不得误述）**：Step 1 的 `topic_terms` 修复是**针对性修补**，仅覆盖已逐条确认的 4 个错配案例，**不是**系统性修复 aux 过度宽泛问题；其余 83 条（其中 21 条含泛型原子）的同类风险仍在 Phase 2 排查。
+
+**我们选择公开这些缺口，而非掩盖** —— 合规工具的可信度来自「知道自己哪里不可靠」，而不是「声称自己完美」。
+
+---
+
 ## 作品集关系
 
 | 项目 | 合规领域 | 判定性质 |
